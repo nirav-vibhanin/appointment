@@ -21,7 +21,10 @@ import {
 // Async thunks
 export const fetchDoctors = createAsyncThunk(
   'doctors/fetchDoctors',
-  async ({ filters, page, limit }: { filters?: DoctorFilters; page?: number; limit?: number }) => {
+  async (
+    params: { filters?: DoctorFilters; page?: number; limit?: number } | undefined = {}
+  ) => {
+    const { filters, page, limit } = params;
     const response = await doctorApi.getDoctors(filters, page, limit);
     return response;
   }

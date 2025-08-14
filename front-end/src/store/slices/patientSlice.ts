@@ -19,8 +19,10 @@ import {
 // Async thunks
 export const fetchPatients = createAsyncThunk(
   'patients/fetchPatients',
-  async ({ filters, page, limit }: { filters?: PatientFilters; page?: number; limit?: number }) => {
+  async (args?: { filters?: PatientFilters; page?: number; limit?: number }) => {
+    const { filters, page, limit } = args || {};
     const response = await patientApi.getPatients(filters, page, limit);
+    console.log("response", response);
     return response;
   }
 );
@@ -660,7 +662,14 @@ const patientSlice = createSlice({
       .addCase(searchPatients.fulfilled, (state, action) => {
         state.loading.searching = false;
         state.searchResults = action.payload.patients;
-        state.searchPagination = action.payload.pagination;
+        const { page, limit } = state.searchPagination;
+        const total = action.payload.total || 0;
+        state.searchPagination = {
+          page,
+          limit,
+          total,
+          totalPages: limit > 0 ? Math.ceil(total / limit) : 0,
+        };
       })
       .addCase(searchPatients.rejected, (state, action) => {
         state.loading.searching = false;

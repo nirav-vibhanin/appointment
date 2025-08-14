@@ -2,13 +2,11 @@ import { apiService } from './api';
 import {
   Appointment,
   AppointmentStatus,
-  AppointmentType,
   CreateAppointmentRequest,
   UpdateAppointmentRequest,
   RescheduleAppointmentRequest,
   AppointmentFilters,
   AppointmentStats,
-  AppointmentCalendar,
   AppointmentListResponse,
   AppointmentCalendarResponse,
   TimeSlot,
@@ -29,8 +27,35 @@ export class AppointmentApiService {
       limit: limit.toString(),
       ...this.buildFilterParams(filters),
     });
-
-    return apiService.get<AppointmentListResponse>(`${this.baseUrl}?${params}`);
+    const res = await apiService.get<any>(`${this.baseUrl}?${params}`);
+    // Normalize shapes into AppointmentListResponse
+    // 1) Raw array
+    if (Array.isArray(res)) {
+      return {
+        appointments: res as Appointment[],
+        pagination: { page, limit, total: (res as Appointment[]).length, totalPages: 1 },
+        stats: undefined as any,
+      } as unknown as AppointmentListResponse;
+    }
+    // 2) ApiResponse wrapper { data: [] }
+    if (res && Array.isArray(res.data)) {
+      const list = res.data as Appointment[];
+      return {
+        appointments: list,
+        pagination: { page, limit, total: list.length, totalPages: 1 },
+        stats: res.stats ?? (undefined as any),
+      } as unknown as AppointmentListResponse;
+    }
+    // 3) Already correct
+    if (res && Array.isArray(res.appointments)) {
+      return res as AppointmentListResponse;
+    }
+    // Fallback empty
+    return {
+      appointments: [],
+      pagination: { page, limit, total: 0, totalPages: 0 },
+      stats: undefined as any,
+    } as unknown as AppointmentListResponse;
   }
 
   // Get appointment by ID
@@ -46,6 +71,8 @@ export class AppointmentApiService {
     apiService.invalidateCache('appointments');
     apiService.invalidateCache('doctors');
     apiService.invalidateCache('patients');
+    // Also invalidate slots so availability refreshes
+    apiService.invalidateCache('appointments/slots');
     
     return appointment;
   }
@@ -72,12 +99,15 @@ export class AppointmentApiService {
 
   // Cancel appointment
   async cancelAppointment(id: string, reason?: string): Promise<Appointment> {
-    const data = {
-      status: AppointmentStatus.CANCELLED,
-      notes: reason ? `Cancelled: ${reason}` : 'Appointment cancelled',
-    };
-    
-    return this.updateAppointment(id, data);
+    // Backend frees the slot on cancel: PATCH /appointments/:id/cancel
+    const appointment = await apiService.patch<Appointment>(`${this.baseUrl}/${id}/cancel`, {
+      reason,
+    });
+    // Invalidate caches and slots
+    apiService.invalidateCache('appointments');
+    apiService.invalidateCache(`appointments/${id}`);
+    apiService.invalidateCache('appointments/slots');
+    return appointment;
   }
 
   // Reschedule appointment
@@ -131,15 +161,16 @@ export class AppointmentApiService {
     return apiService.get<AppointmentCalendarResponse>(`${this.baseUrl}/calendar?${params}`);
   }
 
-  // Get available time slots for a doctor on a specific date
-  async getAvailableTimeSlots(doctorId: string, date: string): Promise<TimeSlot[]> {
-    const params = new URLSearchParams({ doctorId, date });
-    return apiService.get<TimeSlot[]>(`${this.baseUrl}/time-slots?${params}`);
+  // Get time slots for a doctor on a specific date
+  async getAvailableTimeSlots(doctorId: string, date: string, includeBooked: boolean = false): Promise<TimeSlot[]> {
+    const params = new URLSearchParams({ doctorId, date, ...(includeBooked ? { includeBooked: 'true' } : {}) });
+    // Backend route: GET /appointments/slots/available?doctorId=...&date=...&includeBooked=true
+    return apiService.get<TimeSlot[]>(`${this.baseUrl}/slots/available?${params}`);
   }
 
   // Alias for backward compatibility
-  async getAvailableSlots(doctorId: string, date: string): Promise<TimeSlot[]> {
-    return this.getAvailableTimeSlots(doctorId, date);
+  async getAvailableSlots(doctorId: string, date: string, includeBooked: boolean = false): Promise<TimeSlot[]> {
+    return this.getAvailableTimeSlots(doctorId, date, includeBooked);
   }
 
   // Get time slots by ID
@@ -163,10 +194,10 @@ export class AppointmentApiService {
   }
 
   // Block time slot
-  async blockTimeSlot(id: string, reason?: string): Promise<TimeSlot> {
+  async blockTimeSlot(id: string, _reason?: string): Promise<TimeSlot> {
+    // Notes are not part of Partial<TimeSlot> type; block by status only
     return this.updateTimeSlot(id, {
       status: TimeSlotStatus.BLOCKED,
-      notes: reason,
     });
   }
 
@@ -178,13 +209,35 @@ export class AppointmentApiService {
     limit: number = 10
   ): Promise<AppointmentListResponse> {
     const params = new URLSearchParams({
-      patientId,
       page: page.toString(),
       limit: limit.toString(),
       ...(status && { status: status.join(',') }),
     });
 
-    return apiService.get<AppointmentListResponse>(`${this.baseUrl}/patient/${patientId}?${params}`);
+    const res = await apiService.get<any>(`${this.baseUrl}/patient/${patientId}?${params}`);
+    if (Array.isArray(res)) {
+      return {
+        appointments: res as Appointment[],
+        pagination: { page, limit, total: (res as Appointment[]).length, totalPages: 1 },
+        stats: undefined as any,
+      } as unknown as AppointmentListResponse;
+    }
+    if (res && Array.isArray(res.data)) {
+      const list = res.data as Appointment[];
+      return {
+        appointments: list,
+        pagination: { page, limit, total: list.length, totalPages: 1 },
+        stats: res.stats ?? (undefined as any),
+      } as unknown as AppointmentListResponse;
+    }
+    if (res && Array.isArray(res.appointments)) {
+      return res as AppointmentListResponse;
+    }
+    return {
+      appointments: [],
+      pagination: { page, limit, total: 0, totalPages: 0 },
+      stats: undefined as any,
+    } as unknown as AppointmentListResponse;
   }
 
   // Get appointments by doctor
@@ -196,14 +249,36 @@ export class AppointmentApiService {
     limit: number = 10
   ): Promise<AppointmentListResponse> {
     const params = new URLSearchParams({
-      doctorId,
       page: page.toString(),
       limit: limit.toString(),
       ...(status && { status: status.join(',') }),
       ...(date && { date }),
     });
 
-    return apiService.get<AppointmentListResponse>(`${this.baseUrl}/doctor/${doctorId}?${params}`);
+    const res = await apiService.get<any>(`${this.baseUrl}/doctor/${doctorId}?${params}`);
+    if (Array.isArray(res)) {
+      return {
+        appointments: res as Appointment[],
+        pagination: { page, limit, total: (res as Appointment[]).length, totalPages: 1 },
+        stats: undefined as any,
+      } as unknown as AppointmentListResponse;
+    }
+    if (res && Array.isArray(res.data)) {
+      const list = res.data as Appointment[];
+      return {
+        appointments: list,
+        pagination: { page, limit, total: list.length, totalPages: 1 },
+        stats: res.stats ?? (undefined as any),
+      } as unknown as AppointmentListResponse;
+    }
+    if (res && Array.isArray(res.appointments)) {
+      return res as AppointmentListResponse;
+    }
+    return {
+      appointments: [],
+      pagination: { page, limit, total: 0, totalPages: 0 },
+      stats: undefined as any,
+    } as unknown as AppointmentListResponse;
   }
 
   // Get upcoming appointments
@@ -249,7 +324,7 @@ export class AppointmentApiService {
       q: query,
       page: page.toString(),
       limit: limit.toString(),
-      ...this.buildFilterParams(filters),
+      ...this.buildFilterParams(filters ?? {}),
     });
 
     return apiService.get<AppointmentListResponse>(`${this.baseUrl}/search?${params}`);
@@ -262,7 +337,7 @@ export class AppointmentApiService {
   ): Promise<Blob> {
     const params = new URLSearchParams({
       format,
-      ...this.buildFilterParams(filters),
+      ...this.buildFilterParams(filters ?? {}),
     });
 
     const response = await apiService.get<Blob>(`${this.baseUrl}/export?${params}`, {

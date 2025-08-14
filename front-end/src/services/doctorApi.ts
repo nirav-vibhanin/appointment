@@ -32,8 +32,35 @@ export class DoctorApiService {
       limit: limit.toString(),
       ...this.buildFilterParams(filters),
     });
-
-    return apiService.get<DoctorListResponse>(`${this.baseUrl}?${params}`);
+    const res = await apiService.get<any>(`${this.baseUrl}?${params}`);
+    // Normalize various possible shapes into DoctorListResponse
+    // 1) Raw array
+    if (Array.isArray(res)) {
+      return {
+        doctors: res as Doctor[],
+        pagination: { page, limit, total: (res as Doctor[]).length, totalPages: 1 },
+        stats: undefined as any,
+      } as unknown as DoctorListResponse;
+    }
+    // 2) ApiResponse wrapper with data: []
+    if (res && Array.isArray(res.data)) {
+      const list = res.data as Doctor[];
+      return {
+        doctors: list,
+        pagination: { page, limit, total: list.length, totalPages: 1 },
+        stats: res.stats ?? (undefined as any),
+      } as unknown as DoctorListResponse;
+    }
+    // 3) Already a paginated object with doctors
+    if (res && Array.isArray(res.doctors)) {
+      return res as DoctorListResponse;
+    }
+    // Fallback: empty
+    return {
+      doctors: [],
+      pagination: { page, limit, total: 0, totalPages: 0 },
+      stats: undefined as any,
+    } as unknown as DoctorListResponse;
   }
 
   // Get doctor by ID
@@ -83,10 +110,8 @@ export class DoctorApiService {
 
   // Deactivate doctor
   async deactivateDoctor(id: string, reason?: string): Promise<Doctor> {
-    return this.updateDoctor(id, {
-      status: DoctorStatus.INACTIVE,
-      notes: reason ? `Deactivated: ${reason}` : 'Doctor deactivated',
-    });
+    // UpdateDoctorRequest does not support arbitrary notes; only set status
+    return this.updateDoctor(id, { status: DoctorStatus.INACTIVE });
   }
 
   // Reactivate doctor
@@ -246,10 +271,8 @@ export class DoctorApiService {
   }
 
   async bulkDeactivateDoctors(doctorIds: string[], reason?: string): Promise<Doctor[]> {
-    return this.bulkUpdateDoctors(doctorIds, {
-      status: DoctorStatus.INACTIVE,
-      notes: reason ? `Bulk deactivated: ${reason}` : 'Bulk deactivated',
-    });
+    // Only status field is supported by UpdateDoctorRequest
+    return this.bulkUpdateDoctors(doctorIds, { status: DoctorStatus.INACTIVE });
   }
 
   async bulkReactivateDoctors(doctorIds: string[]): Promise<Doctor[]> {
@@ -417,51 +440,52 @@ export class DoctorApiService {
   }
 
   // Helper method to build filter parameters
-  private buildFilterParams(filters: DoctorFilters): Record<string, string> {
+  private buildFilterParams(filters?: DoctorFilters): Record<string, string> {
     const params: Record<string, string> = {};
+    const f = (filters || {}) as DoctorFilters;
 
-    if (filters.search) {
-      params.search = filters.search;
+    if (f.search) {
+      params.search = f.search;
     }
 
-    if (filters.specialization?.length) {
-      params.specialization = filters.specialization.join(',');
+    if (f.specialization?.length) {
+      params.specialization = f.specialization.join(',');
     }
 
-    if (filters.status?.length) {
-      params.status = filters.status.join(',');
+    if (f.status?.length) {
+      params.status = f.status.join(',');
     }
 
-    if (filters.availabilityType?.length) {
-      params.availabilityType = filters.availabilityType.join(',');
+    if (f.availabilityType?.length) {
+      params.availabilityType = f.availabilityType.join(',');
     }
 
-    if (filters.experienceMin !== undefined) {
-      params.experienceMin = filters.experienceMin.toString();
+    if (f.experienceMin !== undefined) {
+      params.experienceMin = f.experienceMin.toString();
     }
 
-    if (filters.experienceMax !== undefined) {
-      params.experienceMax = filters.experienceMax.toString();
+    if (f.experienceMax !== undefined) {
+      params.experienceMax = f.experienceMax.toString();
     }
 
-    if (filters.ratingMin !== undefined) {
-      params.ratingMin = filters.ratingMin.toString();
+    if (f.ratingMin !== undefined) {
+      params.ratingMin = f.ratingMin.toString();
     }
 
-    if (filters.feeMin !== undefined) {
-      params.feeMin = filters.feeMin.toString();
+    if (f.feeMin !== undefined) {
+      params.feeMin = f.feeMin.toString();
     }
 
-    if (filters.feeMax !== undefined) {
-      params.feeMax = filters.feeMax.toString();
+    if (f.feeMax !== undefined) {
+      params.feeMax = f.feeMax.toString();
     }
 
-    if (filters.languages?.length) {
-      params.languages = filters.languages.join(',');
+    if (f.languages?.length) {
+      params.languages = f.languages.join(',');
     }
 
-    if (filters.isVerified !== undefined) {
-      params.isVerified = filters.isVerified.toString();
+    if (f.isVerified !== undefined) {
+      params.isVerified = f.isVerified.toString();
     }
 
     return params;

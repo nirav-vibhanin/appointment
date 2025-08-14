@@ -1,88 +1,152 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { AppDispatch, RootState } from '../store'
-import { fetchAppointments, cancelAppointment, updateAppointment } from '../store/slices/appointmentSlice'
-import { Calendar, Clock, User, MapPin, Edit, Trash2, CheckCircle, XCircle } from 'lucide-react'
+import { fetchAppointments, fetchPatientAppointments, cancelAppointment } from '../store/slices/appointmentSlice'
+import { Calendar, Clock, User, MapPin, Trash2, CheckCircle, XCircle } from 'lucide-react'
+import { AppointmentStatus } from '../types/appointment'
 import { format } from 'date-fns'
+import { fetchDoctors } from '../store/slices/doctorSlice'
+import { fetchPatients as fetchPatientsList } from '../store/slices/patientSlice'
 
 const MyAppointments = () => {
   const dispatch = useDispatch<AppDispatch>()
-  const { appointments, loading, error } = useSelector((state: RootState) => ({
+  const { appointments, patientAppointments, loadingAppointments, loadingPatientAppointments, error, selectedPatient, patients, doctors } = useSelector((state: RootState) => ({
     appointments: state.appointments.appointments,
-    loading: state.appointments.loading.appointments,
-    error: state.appointments.error.appointments
+    patientAppointments: state.appointments.patientAppointments,
+    loadingAppointments: state.appointments.loading.appointments,
+    loadingPatientAppointments: state.appointments.loading.patientAppointments,
+    error: state.appointments.error.appointments,
+    selectedPatient: state.patients.selectedPatient,
+    patients: state.patients.patients,
+    doctors: state.doctors.doctors,
   }))
-  const [editingAppointment, setEditingAppointment] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState({
-    date: '',
-    time: '',
-    notes: '',
-  })
+  // Editing removed per request
 
   useEffect(() => {
-    dispatch(fetchAppointments())
-  }, [dispatch])
+    // Prefer fetching only this patient's appointments
+    if (selectedPatient?.id) {
+      dispatch(fetchPatientAppointments({ patientId: selectedPatient.id, page: 1, limit: 50 }))
+    } else {
+      // Fallback: fetch all (until patient is selected elsewhere)
+      dispatch(fetchAppointments({ page: 1, limit: 50 }))
+    }
+    // Ensure lookup data available for names
+    if (!doctors || doctors.length === 0) {
+      dispatch(fetchDoctors({ page: 1, limit: 200 }))
+    }
+    if (!patients || patients.length === 0) {
+      dispatch(fetchPatientsList({ page: 1, limit: 200 }))
+    }
+  }, [dispatch, selectedPatient?.id])
 
   const handleCancelAppointment = async (id: string) => {
     if (window.confirm('Are you sure you want to cancel this appointment?')) {
       try {
-        await dispatch(cancelAppointment(id)).unwrap()
+        await dispatch(cancelAppointment({ id })).unwrap()
+        // Refresh the list after cancelling
+        if (selectedPatient?.id) {
+          dispatch(fetchPatientAppointments({ patientId: selectedPatient.id, page: 1, limit: 50 }))
+        } else {
+          dispatch(fetchAppointments({ page: 1, limit: 50 }))
+        }
       } catch (error) {
         console.error('Failed to cancel appointment:', error)
       }
     }
   }
 
-  const handleEditAppointment = async (id: string) => {
-    try {
-      await dispatch(updateAppointment({ id, appointmentData: editForm })).unwrap()
-      setEditingAppointment(null)
-      setEditForm({ date: '', time: '', notes: '' })
-    } catch (error) {
-      console.error('Failed to update appointment:', error)
-    }
-  }
+  // Edit functionality removed
 
-  const startEditing = (appointment: any) => {
-    setEditingAppointment(appointment.id)
-    setEditForm({
-      date: appointment.date,
-      time: appointment.time,
-      notes: appointment.notes || '',
-    })
-  }
+  // startEditing removed
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: AppointmentStatus) => {
     switch (status) {
-      case 'booked':
+      case AppointmentStatus.SCHEDULED:
+      case AppointmentStatus.CONFIRMED:
         return 'bg-blue-100 text-blue-800'
-      case 'completed':
+      case AppointmentStatus.IN_PROGRESS:
+        return 'bg-indigo-100 text-indigo-800'
+      case AppointmentStatus.COMPLETED:
         return 'bg-green-100 text-green-800'
-      case 'cancelled':
+      case AppointmentStatus.CANCELLED:
         return 'bg-red-100 text-red-800'
+      case AppointmentStatus.RESCHEDULED:
+        return 'bg-yellow-100 text-yellow-800'
+      case AppointmentStatus.NO_SHOW:
+        return 'bg-gray-100 text-gray-800'
       default:
         return 'bg-gray-100 text-gray-800'
     }
   }
 
-  const getStatusIcon = (status: string) => {
+  const getStatusIcon = (status: AppointmentStatus) => {
     switch (status) {
-      case 'booked':
+      case AppointmentStatus.SCHEDULED:
+      case AppointmentStatus.CONFIRMED:
+      case AppointmentStatus.IN_PROGRESS:
+      case AppointmentStatus.RESCHEDULED:
         return <Clock className="w-4 h-4" />
-      case 'completed':
+      case AppointmentStatus.COMPLETED:
         return <CheckCircle className="w-4 h-4" />
-      case 'cancelled':
+      case AppointmentStatus.CANCELLED:
+      case AppointmentStatus.NO_SHOW:
         return <XCircle className="w-4 h-4" />
       default:
         return <Clock className="w-4 h-4" />
     }
   }
 
-  const filteredAppointments = appointments.filter(
-    (appointment) => appointment.status !== 'available'
-  )
+  // Exclude non-user items (defensive in case backend leaks slot-like entries)
+  const allowedStatuses: string[] = Object.values(AppointmentStatus)
+  const baseList = selectedPatient?.id ? patientAppointments : appointments
+  const filteredAppointments = baseList
+    .filter((a: any) => allowedStatuses.includes(a.status) || a.status === 'booked')
+    .map((a: any) => {
+      // Enrich doctor/patient if relation missing; compare IDs as strings
+      const findById = <T extends { id: any }>(list: T[] = [], id: any) => list.find((x) => String(x.id) === String(id))
+      let doc: any = a.doctor || findById(doctors as any, a.doctorId)
+      let pat: any = a.patient || findById(patients as any, a.patientId)
 
-  if (loading) {
+      // Build robust names to avoid 'undefined undefined'
+      const pickNameParts = (obj: any, alt?: string) => {
+        if (!obj && !alt) return { firstName: 'Unknown', lastName: '' }
+        const first = obj?.firstName ?? obj?.firstname
+        const last = obj?.lastName ?? obj?.lastname
+        let name = obj?.name ?? obj?.fullName ?? obj?.displayName ?? alt ?? ''
+        if (!first && !last && name) {
+          const parts = String(name).trim().split(' ').filter(Boolean)
+          return { firstName: parts[0] || name, lastName: parts.slice(1).join(' ') }
+        }
+        return { firstName: first || (name ? String(name) : 'Unknown'), lastName: last || '' }
+      }
+
+      if (!doc) {
+        const parts = pickNameParts(undefined, (a as any).doctorName)
+        doc = { id: a.doctorId, ...parts }
+      } else {
+        // Ensure doc has first/last populated from fallbacks
+        const parts = pickNameParts(doc)
+        doc = { ...doc, ...parts }
+      }
+
+      if (!pat) {
+        const parts = pickNameParts(undefined, (a as any).patientName)
+        pat = { id: a.patientId, ...parts }
+      } else {
+        const parts = pickNameParts(pat)
+        pat = { ...pat, ...parts }
+      }
+
+      // Normalize backend 'booked' to scheduled for UI consistency
+      const normalizedStatus = a.status === 'booked' ? AppointmentStatus.SCHEDULED : a.status
+      // Ensure start/end time available; fallback to embedded timeSlot
+      const startTime = a.startTime || a.timeSlot?.startTime || ''
+      const endTime = a.endTime || a.timeSlot?.endTime || ''
+      return { ...a, status: normalizedStatus, startTime, endTime, doctor: doc, patient: pat }
+    })
+
+  const isLoading = selectedPatient?.id ? loadingPatientAppointments : loadingAppointments
+  if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="text-lg text-gray-600">Loading appointments...</div>
@@ -113,60 +177,12 @@ const MyAppointments = () => {
       ) : (
         <div className="grid gap-6">
           {filteredAppointments.map((appointment) => (
-            <div key={appointment.id} className="card">
-              {editingAppointment === appointment.id ? (
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium text-gray-900">Edit Appointment</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                      <input
-                        type="date"
-                        value={editForm.date}
-                        onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
-                        className="input"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Time</label>
-                      <input
-                        type="time"
-                        value={editForm.time}
-                        onChange={(e) => setEditForm({ ...editForm, time: e.target.value })}
-                        className="input"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                    <textarea
-                      value={editForm.notes}
-                      onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
-                      rows={3}
-                      className="input"
-                    />
-                  </div>
-                  <div className="flex justify-end space-x-3">
-                    <button
-                      onClick={() => setEditingAppointment(null)}
-                      className="btn btn-secondary"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => handleEditAppointment(appointment.id)}
-                      className="btn btn-primary"
-                    >
-                      Save Changes
-                    </button>
-                  </div>
-                </div>
-              ) : (
+            <div key={appointment.id} className="card bg-white shadow-md rounded-lg p-6 space-y-6">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center space-x-3 mb-2">
                       <h3 className="text-lg font-medium text-gray-900">
-                        Dr. {appointment.doctor?.name || 'Unknown Doctor'}
+                        {appointment.doctor ? `${appointment.doctor.firstName} ${appointment.doctor.lastName}` : 'Unknown Doctor'}
                       </h3>
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(appointment.status)}`}>
                         {getStatusIcon(appointment.status)}
@@ -181,11 +197,11 @@ const MyAppointments = () => {
                       </div>
                       <div className="flex items-center space-x-2">
                         <Clock className="w-4 h-4" />
-                        <span>{appointment.time}</span>
+                        <span>{appointment.startTime || 'N/A'}{appointment.endTime ? ` - ${appointment.endTime}` : ''}</span>
                       </div>
                       <div className="flex items-center space-x-2">
                         <User className="w-4 h-4" />
-                        <span>{appointment.patient?.name || 'Unknown Patient'}</span>
+                        <span>{appointment.patient ? `${appointment.patient.firstName} ${appointment.patient.lastName}` : 'Unknown Patient'}</span>
                       </div>
                       <div className="flex items-center space-x-2">
                         <MapPin className="w-4 h-4" />
@@ -201,27 +217,17 @@ const MyAppointments = () => {
                   </div>
 
                   <div className="flex space-x-2 ml-4">
-                    {appointment.status === 'booked' && (
-                      <>
-                        <button
-                          onClick={() => startEditing(appointment)}
-                          className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-                          title="Edit appointment"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleCancelAppointment(appointment.id)}
-                          className="p-2 text-gray-400 hover:text-red-600 transition-colors"
-                          title="Cancel appointment"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </>
+                    {[AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED, AppointmentStatus.RESCHEDULED].includes(appointment.status) && (
+                      <button
+                        onClick={() => handleCancelAppointment(appointment.id)}
+                        className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                        title="Cancel appointment"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     )}
                   </div>
                 </div>
-              )}
             </div>
           ))}
         </div>

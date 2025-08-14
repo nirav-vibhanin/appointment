@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { Formik, Form, Field, ErrorMessage } from 'formik'
 import * as Yup from 'yup'
@@ -21,22 +21,118 @@ const validationSchema = Yup.object({
 const BookAppointment = () => {
   const dispatch = useDispatch<AppDispatch>()
   const navigate = useNavigate()
-  const { doctors } = useSelector((state: RootState) => state.doctors)
-  const { patients } = useSelector((state: RootState) => state.patients)
+  const { doctors = [] } = useSelector((state: RootState) => state.doctors || ({} as any)) as any
+  const {
+    patients = [],
+    loading: patientLoadingState = {},
+    error: patientErrorState = {},
+  } = useSelector((state: RootState) => state.patients || ({} as any)) as any
   const { loading, error } = useSelector((state: RootState) => ({
     loading: state.appointments.loading.creating,
     error: state.appointments.error.creating
   }))
+
+  console.log("patients" ,patients);
 
   const [selectedDoctor, setSelectedDoctor] = useState('')
   const [selectedDate, setSelectedDate] = useState('')
   const [availableSlots, setAvailableSlots] = useState<AppointmentSlot[]>([])
   const [loadingSlots, setLoadingSlots] = useState(false)
 
+  // Build a robust display label from varying API shapes
+  const renderPatientLabel = (patient: any) => {
+    const fn = (patient.firstName || '').trim()
+    const ln = (patient.lastName || '').trim()
+    const full = [fn, ln].filter(Boolean).join(' ')
+    const primary = full || patient.name || ''
+    const secondary = patient.email || patient.phone || ''
+    return secondary ? `${primary} - ${secondary}` : primary
+  }
+
+  // Lightweight single-select searchable dropdown (no external deps)
+  const SearchableSelect = ({
+    options,
+    value,
+    onChange,
+    placeholder = 'Select an option',
+    ariaLabel,
+  }: {
+    options: { value: string; label: string }[]
+    value: string
+    onChange: (v: string) => void
+    placeholder?: string
+    ariaLabel?: string
+  }) => {
+    const [open, setOpen] = useState(false)
+    const [query, setQuery] = useState('')
+
+    const selected = useMemo(() => options.find(o => o.value === value) || null, [options, value])
+    const filtered = useMemo(() => {
+      const q = query.trim().toLowerCase()
+      if (!q) return options
+      return options.filter(o => o.label.toLowerCase().includes(q))
+    }, [options, query])
+
+    return (
+      <div className="relative">
+        <button
+          type="button"
+          aria-label={ariaLabel}
+          className="input w-full text-left"
+          onClick={() => setOpen(o => !o)}
+        >
+          {selected ? selected.label : placeholder}
+        </button>
+        {open && (
+          <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded shadow">
+            <div className="p-2 border-b">
+              <input
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Type to search..."
+                className="w-full px-3 py-2 border rounded focus:outline-none focus:ring"
+              />
+            </div>
+            <ul className="max-h-56 overflow-auto">
+              {filtered.length === 0 && (
+                <li className="px-3 py-2 text-gray-500">No results</li>
+              )}
+              {filtered.map(opt => (
+                <li
+                  key={opt.value}
+                  className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                  onClick={() => {
+                    onChange(opt.value)
+                    setOpen(false)
+                    setQuery('')
+                  }}
+                >
+                  {opt.label}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   useEffect(() => {
-    dispatch(fetchDoctors())
-    dispatch(fetchPatients())
+    dispatch(fetchDoctors({ page: 1, limit: 100 }))
+    // Request a larger page size so the dropdown has enough patients
+    dispatch(fetchPatients({ page: 1, limit: 100 }))
   }, [dispatch])
+
+  // Memoize list to avoid re-renders; native select will display all
+  const patientList = useMemo(() => (patients || []), [patients])
+
+  // If previously selected doctor is not in the loaded list, clear it to avoid invalid IDs
+  useEffect(() => {
+    if (selectedDoctor && !(doctors || []).some((d: any) => String(d.id) === String(selectedDoctor))) {
+      setSelectedDoctor('')
+    }
+  }, [doctors, selectedDoctor])
 
   useEffect(() => {
     if (selectedDoctor && selectedDate) {
@@ -48,10 +144,16 @@ const BookAppointment = () => {
 
   const fetchAvailableSlots = async () => {
     if (!selectedDoctor || !selectedDate) return
+    // Ensure the selected doctor exists in the loaded list (avoid stale/static IDs)
+    if (!(doctors || []).some((d: any) => String(d.id) === String(selectedDoctor))) {
+      console.warn('Selected doctor not found in list, skipping slot fetch.')
+      return
+    }
 
     setLoadingSlots(true)
     try {
-      const slots = await appointmentApi.getAvailableSlots(selectedDoctor, selectedDate)
+      // Include booked slots so we can show them disabled for transparency
+      const slots = await appointmentApi.getAvailableSlots(selectedDoctor, selectedDate, true)
       setAvailableSlots(slots)
     } catch (error) {
       console.error('Failed to fetch available slots:', error)
@@ -99,26 +201,28 @@ const BookAppointment = () => {
           validationSchema={validationSchema}
           onSubmit={handleSubmit}
         >
-          {({ isSubmitting, setFieldValue }) => (
+          {({ isSubmitting, setFieldValue, values }) => (
             <Form className="space-y-6">
               {/* Patient Selection */}
               <div>
                 <label htmlFor="patientId" className="block text-sm font-medium text-gray-700 mb-2">
                   Patient
                 </label>
-                <Field
-                  as="select"
-                  id="patientId"
-                  name="patientId"
-                  className="input"
-                >
-                  <option value="">Select a patient</option>
-                  {patients.map((patient) => (
-                    <option key={patient.id} value={patient.id}>
-                      {patient.name} - {patient.email}
-                    </option>
-                  ))}
-                </Field>
+                {patientLoadingState?.patients ? (
+                  <div className="input text-gray-500">Loading patients...</div>
+                ) : patientErrorState?.patients ? (
+                  <div className="input text-red-600">Failed to load patients</div>
+                ) : patientList.length === 0 ? (
+                  <div className="input text-gray-500">No patients found</div>
+                ) : (
+                  <SearchableSelect
+                    options={(patientList || []).map((p: any) => ({ value: String(p.id), label: renderPatientLabel(p) }))}
+                    value={String((values as any).patientId || '')}
+                    onChange={(v) => setFieldValue('patientId', v)}
+                    placeholder="Search and select a patient"
+                    ariaLabel="Patient"
+                  />
+                )}
                 <ErrorMessage name="patientId" component="div" className="text-red-500 text-sm mt-1" />
               </div>
 
@@ -127,24 +231,28 @@ const BookAppointment = () => {
                 <label htmlFor="doctorId" className="block text-sm font-medium text-gray-700 mb-2">
                   Doctor
                 </label>
-                <Field
-                  as="select"
-                  id="doctorId"
-                  name="doctorId"
-                  className="input"
-                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
-                    setFieldValue('doctorId', e.target.value)
-                    setSelectedDoctor(e.target.value)
-                    setFieldValue('time', '')
-                  }}
-                >
-                  <option value="">Select a doctor</option>
-                  {doctors.map((doctor) => (
-                    <option key={doctor.id} value={doctor.id}>
-                      Dr. {doctor.name} - {doctor.specialization}
-                    </option>
-                  ))}
-                </Field>
+                {doctors.length === 0 ? (
+                  <div className="input bg-gray-50 text-gray-500">Loading doctors or none found</div>
+                ) : (
+                  <Field
+                    as="select"
+                    id="doctorId"
+                    name="doctorId"
+                    className="input"
+                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                      setFieldValue('doctorId', e.target.value)
+                      setSelectedDoctor(e.target.value)
+                      setFieldValue('time', '')
+                    }}
+                  >
+                    <option value="">Select a doctor</option>
+                    {doctors.map((doctor: any) => (
+                      <option key={doctor.id} value={doctor.id}>
+                        {doctor.name} - {doctor.specialization}
+                      </option>
+                    ))}
+                  </Field>
+                )}
                 <ErrorMessage name="doctorId" component="div" className="text-red-500 text-sm mt-1" />
               </div>
 
@@ -183,13 +291,11 @@ const BookAppointment = () => {
                     className="input"
                   >
                     <option value="">Select a time</option>
-                    {availableSlots
-                      .filter((slot) => slot.status === 'available')
-                      .map((slot) => (
-                        <option key={slot.id} value={slot.time}>
-                          {slot.time}
-                        </option>
-                      ))}
+                    {availableSlots.map((slot) => (
+                      <option key={slot.id} value={slot.time} disabled={slot.status !== 'available'}>
+                        {slot.time}{slot.status !== 'available' ? ' (booked)' : ''}
+                      </option>
+                    ))}
                   </Field>
                 ) : selectedDoctor && selectedDate ? (
                   <div className="input bg-gray-50 text-gray-500">

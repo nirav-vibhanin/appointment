@@ -19,7 +19,10 @@ import {
 // Async thunks
 export const fetchAppointments = createAsyncThunk(
   'appointments/fetchAppointments',
-  async ({ filters, page, limit }: { filters?: AppointmentFilters; page?: number; limit?: number }) => {
+  async (
+    params: { filters?: AppointmentFilters; page?: number; limit?: number } | undefined = {}
+  ) => {
+    const { filters, page, limit } = params;
     const response = await appointmentApi.getAppointments(filters, page, limit);
     return response;
   }

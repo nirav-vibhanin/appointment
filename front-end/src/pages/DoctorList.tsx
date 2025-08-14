@@ -51,7 +51,7 @@ const DoctorList = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {doctors.map((doctor) => (
-            <div key={doctor.id} className="card hover:shadow-lg transition-shadow duration-200">
+            <div key={doctor.id} className="card bg-white shadow-md rounded-lg p-6 space-y-6 hover:shadow-lg transition-shadow duration-200">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold text-gray-900">

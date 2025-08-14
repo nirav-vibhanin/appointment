@@ -5,6 +5,85 @@ const { getDatabase } = require('../database/init');
 const router = express.Router();
 const db = getDatabase();
 
+// Helper: generate slots with configurable window and step
+function generateDaySlots(date, startTime = '09:00', endTime = '17:00', stepMinutes = 30) {
+  const slots = [];
+  const [sh, sm] = startTime.split(':').map((n) => parseInt(n, 10));
+  const [eh, em] = endTime.split(':').map((n) => parseInt(n, 10));
+  const start = new Date(`${date}T${String(sh).padStart(2, '0')}:${String(sm).padStart(2, '0')}:00`);
+  const end = new Date(`${date}T${String(eh).padStart(2, '0')}:${String(em).padStart(2, '0')}:00`);
+  const pad = (n) => (n < 10 ? `0${n}` : `${n}`);
+  for (let t = new Date(start); t < end; t.setMinutes(t.getMinutes() + stepMinutes)) {
+    const hh = pad(t.getHours());
+    const mm = pad(t.getMinutes());
+    slots.push(`${hh}:${mm}`);
+  }
+  return slots;
+}
+
+// Helper: ensure slots exist in DB for doctor/date; inserts 'available' rows if missing
+function ensureSlotsForDoctorDate(doctorId, date) {
+  return new Promise((resolve, reject) => {
+    // Load doctor's availability (JSON) and compute window + step
+    db.get('SELECT availability FROM doctors WHERE id = ?', [doctorId], (docErr, docRow) => {
+      if (docErr) return reject(docErr);
+      if (!docRow) {
+        const err = new Error('Doctor not found');
+        // mark error to distinguish in caller
+        err.code = 'DOCTOR_NOT_FOUND';
+        return reject(err);
+      }
+
+      let startTime = '09:00';
+      let endTime = '17:00';
+      let stepMinutes = 30;
+      try {
+        if (docRow && docRow.availability) {
+          const av = JSON.parse(docRow.availability);
+          const weekday = new Date(date + 'T00:00:00').getDay(); // 0-6
+          const dayMap = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+          const key = dayMap[weekday];
+          if (av && av[key]) {
+            startTime = av[key].start || startTime;
+            endTime = av[key].end || endTime;
+          }
+          if (av && typeof av.slotLength === 'number') {
+            stepMinutes = av.slotLength;
+          }
+        }
+      } catch (_) {
+        // fallback to defaults on parse error
+      }
+
+      db.all(
+        'SELECT time FROM appointments WHERE doctorId = ? AND date = ?',
+        [doctorId, date],
+        (err, rows) => {
+          if (err) return reject(err);
+          const existingTimes = new Set(rows.map((r) => r.time));
+          const defaults = generateDaySlots(date, startTime, endTime, stepMinutes);
+          const toInsert = defaults.filter((t) => !existingTimes.has(t));
+          if (toInsert.length === 0) return resolve();
+
+          const now = new Date().toISOString();
+          db.serialize(() => {
+            const stmt = db.prepare(
+              'INSERT INTO appointments (id, patientId, doctorId, date, time, status, notes, createdAt, updatedAt) VALUES (?, NULL, ?, ?, ?, "available", NULL, ?, ?)'
+            );
+            toInsert.forEach((time) => {
+              stmt.run(uuidv4(), doctorId, date, time, now, now);
+            });
+            stmt.finalize((finalizeErr) => {
+              if (finalizeErr) return reject(finalizeErr);
+              resolve();
+            });
+          });
+        }
+      );
+    });
+  });
+}
+
 // Get all appointments (for viewing appointments)
 router.get('/', (req, res) => {
   const query = `
@@ -84,17 +163,18 @@ router.post('/', (req, res) => {
     return res.status(400).json({ error: 'Cannot book appointments in the past' });
   }
 
-  // Check if the slot is available
+  // Check if the slot exists and is available, or if no slot exists (then it's available)
   db.get(
-    'SELECT * FROM appointments WHERE doctorId = ? AND date = ? AND time = ? AND status = "available"',
+    'SELECT * FROM appointments WHERE doctorId = ? AND date = ? AND time = ?',
     [doctorId, date, time],
-    (err, slot) => {
+    (err, existingSlot) => {
       if (err) {
         console.error('Error checking slot availability:', err);
         return res.status(500).json({ error: 'Failed to check slot availability' });
       }
 
-      if (!slot) {
+      // If slot exists and is not available, reject booking
+      if (existingSlot && existingSlot.status !== 'available') {
         return res.status(400).json({ error: 'Selected time slot is not available' });
       }
 
@@ -114,45 +194,65 @@ router.post('/', (req, res) => {
 
           // Book the appointment (REQUIRED: Update slot status to "booked")
           const now = new Date().toISOString();
+          const appointmentId = existingSlot ? existingSlot.id : uuidv4();
 
-          db.run(
-            'UPDATE appointments SET patientId = ?, status = "booked", notes = ?, updatedAt = ? WHERE id = ?',
-            [patientId, notes || null, now, slot.id],
-            function(err) {
-              if (err) {
-                console.error('Error booking appointment:', err);
-                return res.status(500).json({ error: 'Failed to book appointment' });
-              }
-
-              // Get the updated appointment with joined data
-              const query = `
-                SELECT 
-                  a.*,
-                  p.name as patientName,
-                  p.email as patientEmail,
-                  p.phone as patientPhone,
-                  d.name as doctorName,
-                  d.specialization as doctorSpecialization,
-                  d.email as doctorEmail,
-                  d.phone as doctorPhone
-                FROM appointments a
-                LEFT JOIN patients p ON a.patientId = p.id
-                LEFT JOIN doctors d ON a.doctorId = d.id
-                WHERE a.id = ?
-              `;
-
-              db.get(query, [slot.id], (err, appointment) => {
+          if (existingSlot) {
+            // Update existing slot
+            db.run(
+              'UPDATE appointments SET patientId = ?, status = "booked", notes = ?, updatedAt = ? WHERE id = ?',
+              [patientId, notes || null, now, existingSlot.id],
+              function(err) {
                 if (err) {
-                  console.error('Error fetching booked appointment:', err);
-                  return res.status(500).json({ error: 'Appointment booked but failed to retrieve details' });
+                  console.error('Error booking appointment:', err);
+                  return res.status(500).json({ error: 'Failed to book appointment' });
                 }
-                res.status(201).json({
-                  message: 'Appointment booked successfully',
-                  appointment
-                });
+                returnBookedAppointment(existingSlot.id);
+              }
+            );
+          } else {
+            // Create new appointment
+            db.run(
+              'INSERT INTO appointments (id, patientId, doctorId, date, time, status, notes, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, "booked", ?, ?, ?)',
+              [appointmentId, patientId, doctorId, date, time, notes || null, now, now],
+              function(err) {
+                if (err) {
+                  console.error('Error creating appointment:', err);
+                  return res.status(500).json({ error: 'Failed to create appointment' });
+                }
+                returnBookedAppointment(appointmentId);
+              }
+            );
+          }
+
+          function returnBookedAppointment(id) {
+            // Get the appointment with joined data
+            const query = `
+              SELECT 
+                a.*,
+                p.name as patientName,
+                p.email as patientEmail,
+                p.phone as patientPhone,
+                d.name as doctorName,
+                d.specialization as doctorSpecialization,
+                d.email as doctorEmail,
+                d.phone as doctorPhone
+              FROM appointments a
+              LEFT JOIN patients p ON a.patientId = p.id
+              LEFT JOIN doctors d ON a.doctorId = d.id
+              WHERE a.id = ?
+            `;
+
+            db.get(query, [id], (err, appointment) => {
+              if (err) {
+                console.error('Error fetching booked appointment:', err);
+                return res.status(500).json({ error: 'Appointment booked but failed to retrieve details' });
+              }
+              res.status(201).json({
+                message: 'Appointment booked successfully',
+                appointment
               });
-            }
-          );
+            });
+          }
         }
       );
     }
@@ -280,9 +380,9 @@ router.patch('/:id/cancel', (req, res) => {
       return res.status(400).json({ error: 'Cannot cancel past appointments' });
     }
 
-    // Cancel appointment and make slot available again
+    // Cancel appointment and free the slot (set back to available and clear patient/notes)
     db.run(
-      'UPDATE appointments SET status = "cancelled", updatedAt = ? WHERE id = ?',
+      'UPDATE appointments SET status = "available", patientId = NULL, notes = NULL, updatedAt = ? WHERE id = ?',
       [new Date().toISOString(), id],
       function(err) {
         if (err) {
@@ -290,15 +390,15 @@ router.patch('/:id/cancel', (req, res) => {
           return res.status(500).json({ error: 'Failed to cancel appointment' });
         }
 
-        res.json({ message: 'Appointment cancelled successfully' });
+        res.json({ message: 'Appointment cancelled and slot freed successfully' });
       }
     );
   });
 });
 
 // Get available slots (REQUIRED: Display available appointment slots)
-router.get('/slots/available', (req, res) => {
-  const { doctorId, date } = req.query;
+router.get('/slots/available', async (req, res) => {
+  const { doctorId, date, includeBooked } = req.query;
 
   if (!doctorId || !date) {
     return res.status(400).json({ 
@@ -315,20 +415,29 @@ router.get('/slots/available', (req, res) => {
     return res.status(400).json({ error: 'Cannot view slots for past dates' });
   }
 
-  const query = `
-    SELECT id, doctorId, date, time, status
-    FROM appointments 
-    WHERE doctorId = ? AND date = ? AND status = "available"
-    ORDER BY time ASC
-  `;
+  try {
+    // Ensure default available slots exist in DB for the doctor/date
+    await ensureSlotsForDoctorDate(doctorId, date);
 
-  db.all(query, [doctorId, date], (err, rows) => {
-    if (err) {
-      console.error('Error fetching available slots:', err);
-      return res.status(500).json({ error: 'Failed to fetch available slots' });
+    const includeAll = String(includeBooked).toLowerCase() === 'true';
+    const query = includeAll
+      ? `SELECT id, doctorId, date, time, status FROM appointments WHERE doctorId = ? AND date = ? ORDER BY time ASC`
+      : `SELECT id, doctorId, date, time, status FROM appointments WHERE doctorId = ? AND date = ? AND status = "available" ORDER BY time ASC`;
+
+    db.all(query, [doctorId, date], (err, rows) => {
+      if (err) {
+        console.error('Error fetching available slots:', err);
+        return res.status(500).json({ error: 'Failed to fetch available slots' });
+      }
+      res.json(rows);
+    });
+  } catch (e) {
+    if (e && e.code === 'DOCTOR_NOT_FOUND') {
+      return res.status(404).json({ error: 'Doctor not found' });
     }
-    res.json(rows);
-  });
+    console.error('Error ensuring slots exist:', e);
+    return res.status(500).json({ error: 'Failed to prepare available slots' });
+  }
 });
 
 // Get patient's appointments (REQUIRED: For appointment management)
@@ -463,6 +572,63 @@ router.get('/upcoming', (req, res) => {
       console.error('Error fetching upcoming appointments:', err);
       return res.status(500).json({ error: 'Failed to fetch upcoming appointments' });
     }
+    res.json(rows);
+  });
+});
+
+// Get available time slots for a doctor on a specific date (REQUIRED: For appointment booking)
+router.get('/time-slots', (req, res) => {
+  const { doctorId, date } = req.query;
+
+  if (!doctorId || !date) {
+    return res.status(400).json({ error: 'doctorId and date are required' });
+  }
+
+  // Validate date format and ensure it's not in the past
+  const appointmentDate = new Date(date);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  if (appointmentDate < today) {
+    return res.status(400).json({ error: 'Cannot get slots for past dates' });
+  }
+
+  const query = `
+    SELECT 
+      id,
+      doctorId,
+      date,
+      time,
+      status,
+      patientId,
+      notes
+    FROM appointments 
+    WHERE doctorId = ? AND date = ?
+    ORDER BY time ASC
+  `;
+
+  db.all(query, [doctorId, date], (err, rows) => {
+    if (err) {
+      console.error('Error fetching time slots:', err);
+      return res.status(500).json({ error: 'Failed to fetch time slots' });
+    }
+
+    // If no slots exist for this doctor/date, create default available slots
+    if (rows.length === 0) {
+      const defaultTimeSlots = ['09:00', '10:00', '11:00', '14:00', '15:00', '16:00'];
+      const slots = defaultTimeSlots.map((time, index) => ({
+        id: `slot-${doctorId}-${date}-${index}`,
+        doctorId,
+        date,
+        time,
+        status: 'available',
+        patientId: null,
+        notes: null
+      }));
+      return res.json(slots);
+    }
+
+    // Return existing slots
     res.json(rows);
   });
 });

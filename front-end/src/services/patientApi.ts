@@ -1,4 +1,4 @@
-import { apiService } from './api';
+import { apiService, type ApiResponse } from './api';
 import {
   Patient,
   Gender,
@@ -30,7 +30,60 @@ export class PatientApiService {
       ...this.buildFilterParams(filters),
     });
 
-    return apiService.get<PatientListResponse>(`${this.baseUrl}?${params}`);
+    // Many backends wrap payloads as { success, data } or return a raw array
+    const resp = await apiService.get<any>(`${this.baseUrl}?${params}`);
+    const data = (resp && typeof resp === 'object' && 'data' in resp) ? (resp as any).data : resp;
+
+    // If backend returns an array of patients, normalize it into PatientListResponse
+    if (Array.isArray(data)) {
+      const normalizedPatients = data.map((p: any) => {
+        const fullName: string = p.name || '';
+        const parts = fullName.trim().split(/\s+/);
+        const firstName = parts[0] || '';
+        const lastName = parts.slice(1).join(' ');
+        return {
+          // Required fields (fallbacks where necessary)
+          id: String(p.id),
+          firstName,
+          lastName,
+          email: p.email || '',
+          phone: p.phone || '',
+          dateOfBirth: p.dateOfBirth || '',
+          gender: 'other',
+          address: p.address || { street: '', city: '', state: '', zipCode: '', country: '' },
+          emergencyContact: { name: '', relationship: '', phone: '' },
+          isActive: true,
+          createdAt: p.createdAt || '',
+          updatedAt: p.updatedAt || '',
+          // Preserve original name for display fallback
+          name: p.name,
+        } as any; // Cast to satisfy Patient typing; UI only needs a subset
+      });
+
+      const total = normalizedPatients.length;
+      return {
+        patients: normalizedPatients as any,
+        pagination: {
+          page: 1,
+          limit: total,
+          total,
+          totalPages: 1,
+        },
+        stats: {
+          total,
+          active: total,
+          inactive: 0,
+          newThisMonth: 0,
+          newThisYear: 0,
+          byGender: { male: 0, female: 0, other: total, prefer_not_to_say: 0 } as any,
+          byAgeGroup: {},
+          byInsurance: {} as any,
+        },
+      } as PatientListResponse;
+    }
+
+    // Otherwise assume it's already PatientListResponse
+    return data as PatientListResponse;
   }
 
   // Get patient by ID
@@ -88,7 +141,7 @@ export class PatientApiService {
 
   // Get patient statistics
   async getPatientStats(filters?: PatientFilters): Promise<PatientStats> {
-    const params = filters ? this.buildFilterParams(filters) : {};
+    const params = filters ? this.buildFilterParams(filters || ({} as PatientFilters)) : {};
     const queryString = new URLSearchParams(params).toString();
     
     return apiService.get<PatientStats>(`${this.baseUrl}/stats${queryString ? `?${queryString}` : ''}`);
@@ -208,7 +261,7 @@ export class PatientApiService {
   ): Promise<Blob> {
     const params = new URLSearchParams({
       format,
-      ...this.buildFilterParams(filters),
+      ...this.buildFilterParams((filters || ({} as PatientFilters))),
     });
 
     const response = await apiService.get<Blob>(`${this.baseUrl}/export?${params}`, {

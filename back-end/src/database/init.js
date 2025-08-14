@@ -87,25 +87,96 @@ const initializeDatabase = () => {
               return;
             }
             console.log('✅ Appointments table created/verified');
-            
-            // Create indexes for better performance
-            db.run('CREATE INDEX IF NOT EXISTS idx_appointments_doctor_date ON appointments(doctorId, date)', (err) => {
-              if (err) console.error('Error creating index:', err.message);
+
+            // Self-heal legacy schema: ensure patientId IS NULLABLE
+            db.all("PRAGMA table_info('appointments')", (err, columns) => {
+              if (err) {
+                console.error('Error reading appointments schema:', err.message);
+                reject(err);
+                return;
+              }
+              const patientCol = columns.find((c) => c.name === 'patientId');
+              const isNotNull = patientCol && Number(patientCol.notnull) === 1;
+              if (!isNotNull) {
+                // Schema OK
+                proceed();
+                return;
+              }
+
+              console.warn('⚠️ Detected legacy schema with patientId NOT NULL. Migrating to allow NULL...');
+              db.serialize(() => {
+                // Create new table with correct schema
+                db.run(`
+                  CREATE TABLE IF NOT EXISTS appointments_new (
+                    id TEXT PRIMARY KEY,
+                    patientId TEXT,
+                    doctorId TEXT NOT NULL,
+                    date TEXT NOT NULL,
+                    time TEXT NOT NULL,
+                    status TEXT DEFAULT 'available' CHECK (status IN ('available', 'booked', 'cancelled', 'completed')),
+                    notes TEXT,
+                    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (patientId) REFERENCES patients (id) ON DELETE CASCADE,
+                    FOREIGN KEY (doctorId) REFERENCES doctors (id) ON DELETE CASCADE
+                  )
+                `, (err) => {
+                  if (err) {
+                    console.error('Error creating appointments_new table:', err.message);
+                    reject(err);
+                    return;
+                  }
+                  // Copy data; if legacy had NOT NULL, there should be no NULLs yet, but copy as-is
+                  db.run(`
+                    INSERT INTO appointments_new (id, patientId, doctorId, date, time, status, notes, createdAt, updatedAt)
+                    SELECT id, patientId, doctorId, date, time, status, notes, createdAt, updatedAt FROM appointments
+                  `, (err) => {
+                    if (err) {
+                      console.error('Error copying appointments data:', err.message);
+                      reject(err);
+                      return;
+                    }
+                    // Replace old table
+                    db.run('DROP TABLE IF EXISTS appointments', (err) => {
+                      if (err) {
+                        console.error('Error dropping old appointments table:', err.message);
+                        reject(err);
+                        return;
+                      }
+                      db.run('ALTER TABLE appointments_new RENAME TO appointments', (err) => {
+                        if (err) {
+                          console.error('Error renaming appointments_new table:', err.message);
+                          reject(err);
+                          return;
+                        }
+                        console.log('✅ Migrated appointments schema: patientId is now NULLABLE');
+                        proceed();
+                      });
+                    });
+                  });
+                });
+              });
             });
-            db.run('CREATE INDEX IF NOT EXISTS idx_appointments_patient ON appointments(patientId)', (err) => {
-              if (err) console.error('Error creating index:', err.message);
-            });
-            db.run('CREATE INDEX IF NOT EXISTS idx_appointments_status ON appointments(status)', (err) => {
-              if (err) console.error('Error creating index:', err.message);
-            });
-            
-            // Insert sample data if tables are empty
-            insertSampleData()
-              .then(() => {
-                console.log('✅ Database initialization completed');
-                resolve();
-              })
-              .catch(reject);
+
+            function proceed() {
+              // Create indexes for better performance
+              db.run('CREATE INDEX IF NOT EXISTS idx_appointments_doctor_date ON appointments(doctorId, date)', (err) => {
+                if (err) console.error('Error creating index:', err.message);
+              });
+              db.run('CREATE INDEX IF NOT EXISTS idx_appointments_patient ON appointments(patientId)', (err) => {
+                if (err) console.error('Error creating index:', err.message);
+              });
+              db.run('CREATE INDEX IF NOT EXISTS idx_appointments_status ON appointments(status)', (err) => {
+                if (err) console.error('Error creating index:', err.message);
+              });
+              // Insert sample data if tables are empty
+              insertSampleData()
+                .then(() => {
+                  console.log('✅ Database initialization completed');
+                  resolve();
+                })
+                .catch(reject);
+            }
           });
         });
       });
@@ -116,7 +187,7 @@ const initializeDatabase = () => {
 // Insert sample data
 const insertSampleData = () => {
   return new Promise((resolve, reject) => {
-    // Check if doctors table is empty
+    // Always attempt to insert demo doctors/patients (idempotent via INSERT OR IGNORE)
     db.get('SELECT COUNT(*) as count FROM doctors', (err, row) => {
       if (err) {
         console.error('Error checking doctors table:', err.message);
@@ -124,8 +195,11 @@ const insertSampleData = () => {
         return;
       }
 
-      if (row.count === 0) {
-        console.log('📝 Inserting sample data...');
+      if (row && typeof row.count === 'number') {
+        console.log(`ℹ️ Doctors count: ${row.count}`);
+      }
+
+      console.log('📝 Ensuring sample doctors/patients exist...');
         
         // Insert sample doctors
         const doctors = [
@@ -135,7 +209,17 @@ const insertSampleData = () => {
             email: 'sarah.johnson@hospital.com',
             phone: '+1-555-0101',
             specialization: 'Cardiology',
-            experience: 15
+            experience: 15,
+            availability: JSON.stringify({
+              slotLength: 30,
+              mon: { start: '09:00', end: '17:00' },
+              tue: { start: '09:00', end: '17:00' },
+              wed: { start: '09:00', end: '17:00' },
+              thu: { start: '09:00', end: '17:00' },
+              fri: { start: '09:00', end: '17:00' },
+              sat: { start: '10:00', end: '14:00' },
+              sun: null
+            })
           },
           {
             id: 'doc-002',
@@ -143,7 +227,17 @@ const insertSampleData = () => {
             email: 'michael.chen@hospital.com',
             phone: '+1-555-0102',
             specialization: 'Neurology',
-            experience: 12
+            experience: 12,
+            availability: JSON.stringify({
+              slotLength: 20,
+              mon: { start: '10:00', end: '16:00' },
+              tue: { start: '10:00', end: '16:00' },
+              wed: { start: '10:00', end: '16:00' },
+              thu: { start: '10:00', end: '16:00' },
+              fri: { start: '10:00', end: '16:00' },
+              sat: null,
+              sun: null
+            })
           },
           {
             id: 'doc-003',
@@ -151,13 +245,23 @@ const insertSampleData = () => {
             email: 'emily.davis@hospital.com',
             phone: '+1-555-0103',
             specialization: 'Pediatrics',
-            experience: 8
+            experience: 8,
+            availability: JSON.stringify({
+              slotLength: 30,
+              mon: { start: '09:00', end: '15:00' },
+              tue: { start: '09:00', end: '15:00' },
+              wed: { start: '12:00', end: '18:00' },
+              thu: { start: '09:00', end: '15:00' },
+              fri: { start: '09:00', end: '15:00' },
+              sat: { start: '10:00', end: '13:00' },
+              sun: null
+            })
           }
         ];
 
         const doctorStmt = db.prepare(`
-          INSERT INTO doctors (id, name, email, phone, specialization, experience)
-          VALUES (?, ?, ?, ?, ?, ?)
+          INSERT OR IGNORE INTO doctors (id, name, email, phone, specialization, experience, availability)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
         `);
 
         doctors.forEach(doctor => {
@@ -167,7 +271,8 @@ const insertSampleData = () => {
             doctor.email,
             doctor.phone,
             doctor.specialization,
-            doctor.experience
+            doctor.experience,
+            doctor.availability
           ]);
         });
 
@@ -192,7 +297,7 @@ const insertSampleData = () => {
         ];
 
         const patientStmt = db.prepare(`
-          INSERT INTO patients (id, name, email, phone, dateOfBirth)
+          INSERT OR IGNORE INTO patients (id, name, email, phone, dateOfBirth)
           VALUES (?, ?, ?, ?, ?)
         `);
 
@@ -215,7 +320,7 @@ const insertSampleData = () => {
         
         const timeSlots = ['09:00', '10:00', '11:00', '14:00', '15:00', '16:00'];
         const appointmentStmt = db.prepare(`
-          INSERT INTO appointments (id, patientId, doctorId, date, time, status)
+          INSERT OR IGNORE INTO appointments (id, patientId, doctorId, date, time, status)
           VALUES (?, ?, ?, ?, ?, ?)
         `);
 
@@ -237,8 +342,7 @@ const insertSampleData = () => {
         });
 
         appointmentStmt.finalize();
-        console.log('✅ Sample data inserted successfully');
-      }
+        console.log('✅ Sample data ensured');
       
       resolve();
     });
