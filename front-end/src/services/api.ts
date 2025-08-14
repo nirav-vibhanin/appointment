@@ -1,9 +1,7 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
 
-// API Configuration
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
-// Request/Response Types
 export interface ApiResponse<T = any> {
   success: boolean;
   data: T;
@@ -20,7 +18,6 @@ export interface PaginatedResponse<T> extends ApiResponse<T[]> {
   };
 }
 
-// Error Types
 export class ApiError extends Error {
   public status: number;
   public errors?: Record<string, string[]>;
@@ -35,7 +32,6 @@ export class ApiError extends Error {
   }
 }
 
-// Request Queue for handling concurrent requests
 class RequestQueue {
   private queue: Map<string, Promise<any>> = new Map();
 
@@ -57,7 +53,6 @@ class RequestQueue {
   }
 }
 
-// Cache Manager for API responses
 class CacheManager {
   private cache: Map<string, { data: any; timestamp: number; ttl: number }> = new Map();
 
@@ -98,7 +93,6 @@ class CacheManager {
   }
 }
 
-// API Service Class
 class ApiService {
   private client: AxiosInstance;
   private requestQueue: RequestQueue;
@@ -122,19 +116,15 @@ class ApiService {
   }
 
   private setupInterceptors(): void {
-    // Request Interceptor
     this.client.interceptors.request.use(
       (config) => {
-        // Add auth token if available
         const token = this.getAuthToken();
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
         }
 
-        // Add request ID for tracking
         config.headers['X-Request-ID'] = this.generateRequestId();
 
-        // Add timestamp for cache busting
         if (config.method === 'get' && !config.params?.nocache) {
           config.params = { ...config.params, _t: Date.now() };
         }
@@ -146,14 +136,11 @@ class ApiService {
       }
     );
 
-         // Response Interceptor
      this.client.interceptors.response.use(
        (response: AxiosResponse) => {
-         // Handle successful responses
          return response;
        },
              async (error: AxiosError) => {
-         // Handle network errors
          if (!error.response) {
            const networkError = new ApiError(
              'Network error. Please check your connection.',
@@ -165,7 +152,6 @@ class ApiService {
            return Promise.reject(networkError);
          }
 
-         // Handle HTTP errors
          const { status, data } = error.response;
          let message = 'An unexpected error occurred';
 
@@ -212,7 +198,6 @@ class ApiService {
   }
 
   private handleError(error: ApiError): void {
-    // Log error for debugging
     console.error('API Error:', {
       message: error.message,
       status: error.status,
@@ -220,7 +205,6 @@ class ApiService {
       isNetworkError: error.isNetworkError,
     });
 
-    // Show user-friendly error message in console for now
     if (!error.isNetworkError) {
       console.error('Error:', error.message);
     } else {
@@ -232,13 +216,11 @@ class ApiService {
     localStorage.removeItem('authToken');
     localStorage.removeItem('user');
     
-    // Redirect to login page
     if (window.location.pathname !== '/login') {
       window.location.href = '/login';
     }
   }
 
-  // Generic request methods with caching and queuing
   async get<T>(url: string, config?: AxiosRequestConfig, useCache: boolean = true): Promise<T> {
     const cacheKey = `GET:${url}:${JSON.stringify(config?.params || {})}`;
     
@@ -280,7 +262,6 @@ class ApiService {
     return response.data;
   }
 
-  // Retry mechanism for failed requests
   async retryRequest<T>(requestFn: () => Promise<T>): Promise<T> {
     try {
       return await requestFn();
@@ -298,7 +279,6 @@ class ApiService {
     }
   }
 
-  // Cache management
   invalidateCache(pattern?: string): void {
     if (pattern) {
       this.cache.invalidatePattern(pattern);
@@ -307,7 +287,6 @@ class ApiService {
     }
   }
 
-  // File upload helper
   async uploadFile<T>(url: string, file: File, onProgress?: (progress: number) => void): Promise<T> {
     const formData = new FormData();
     formData.append('file', file);
@@ -327,12 +306,10 @@ class ApiService {
     return response.data;
   }
 
-  // Batch requests helper
   async batchRequests<T>(requests: Array<() => Promise<T>>): Promise<T[]> {
     return Promise.all(requests.map(request => request()));
   }
 
-  // Health check
   async healthCheck(): Promise<boolean> {
     try {
       await this.client.get('/health');
@@ -343,9 +320,7 @@ class ApiService {
   }
 }
 
-// Export singleton instance
 export const apiService = new ApiService();
 
-// Export types and utilities
 export type { AxiosRequestConfig, AxiosResponse };
 export { RequestQueue, CacheManager };

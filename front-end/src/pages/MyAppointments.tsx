@@ -20,17 +20,13 @@ const MyAppointments = () => {
     patients: state.patients.patients,
     doctors: state.doctors.doctors,
   }))
-  // Editing removed per request
 
   useEffect(() => {
-    // Prefer fetching only this patient's appointments
     if (selectedPatient?.id) {
       dispatch(fetchPatientAppointments({ patientId: selectedPatient.id, page: 1, limit: 50 }))
     } else {
-      // Fallback: fetch all (until patient is selected elsewhere)
       dispatch(fetchAppointments({ page: 1, limit: 50 }))
     }
-    // Ensure lookup data available for names
     if (!doctors || doctors.length === 0) {
       dispatch(fetchDoctors({ page: 1, limit: 200 }))
     }
@@ -43,7 +39,6 @@ const MyAppointments = () => {
     if (window.confirm('Are you sure you want to cancel this appointment?')) {
       try {
         await dispatch(cancelAppointment({ id })).unwrap()
-        // Refresh the list after cancelling
         if (selectedPatient?.id) {
           dispatch(fetchPatientAppointments({ patientId: selectedPatient.id, page: 1, limit: 50 }))
         } else {
@@ -55,9 +50,6 @@ const MyAppointments = () => {
     }
   }
 
-  // Edit functionality removed
-
-  // startEditing removed
 
   const getStatusColor = (status: AppointmentStatus) => {
     switch (status) {
@@ -96,18 +88,15 @@ const MyAppointments = () => {
     }
   }
 
-  // Exclude non-user items (defensive in case backend leaks slot-like entries)
   const allowedStatuses: string[] = Object.values(AppointmentStatus)
   const baseList = selectedPatient?.id ? patientAppointments : appointments
   const filteredAppointments = baseList
     .filter((a: any) => allowedStatuses.includes(a.status) || a.status === 'booked')
     .map((a: any) => {
-      // Enrich doctor/patient if relation missing; compare IDs as strings
       const findById = <T extends { id: any }>(list: T[] = [], id: any) => list.find((x) => String(x.id) === String(id))
       let doc: any = a.doctor || findById(doctors as any, a.doctorId)
       let pat: any = a.patient || findById(patients as any, a.patientId)
 
-      // Build robust names to avoid 'undefined undefined'
       const pickNameParts = (obj: any, alt?: string) => {
         if (!obj && !alt) return { firstName: 'Unknown', lastName: '' }
         const first = obj?.firstName ?? obj?.firstname
@@ -124,7 +113,6 @@ const MyAppointments = () => {
         const parts = pickNameParts(undefined, (a as any).doctorName)
         doc = { id: a.doctorId, ...parts }
       } else {
-        // Ensure doc has first/last populated from fallbacks
         const parts = pickNameParts(doc)
         doc = { ...doc, ...parts }
       }
@@ -137,9 +125,7 @@ const MyAppointments = () => {
         pat = { ...pat, ...parts }
       }
 
-      // Normalize backend 'booked' to scheduled for UI consistency
       const normalizedStatus = a.status === 'booked' ? AppointmentStatus.SCHEDULED : a.status
-      // Ensure start/end time available; fallback to embedded timeSlot
       const startTime = a.startTime || a.timeSlot?.startTime || ''
       const endTime = a.endTime || a.timeSlot?.endTime || ''
       return { ...a, status: normalizedStatus, startTime, endTime, doctor: doc, patient: pat }

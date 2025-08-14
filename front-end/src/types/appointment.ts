@@ -37,7 +37,6 @@ export interface TimeSlot {
   updatedAt: string;
 }
 
-// Alias for backward compatibility
 export type AppointmentSlot = TimeSlot;
 
 export interface Appointment {
@@ -59,7 +58,6 @@ export interface Appointment {
   createdAt: string;
   updatedAt: string;
   
-  // Relations
   patient?: Patient;
   doctor?: Doctor;
   timeSlot?: TimeSlot;
@@ -135,7 +133,6 @@ export interface AppointmentReminder {
   createdAt: string;
 }
 
-// Utility types
 export type AppointmentWithRelations = Appointment & {
   patient: Patient;
   doctor: Doctor;
@@ -158,6 +155,5 @@ export type AppointmentCalendarResponse = {
   stats: AppointmentStats;
 };
 
-// Import related types
 import { Patient } from './patient';
 import { Doctor } from './doctor';

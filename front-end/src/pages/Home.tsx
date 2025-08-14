@@ -12,8 +12,8 @@ const Home = () => {
   }))
 
   const upcomingAppointments = appointments.filter(
-    (appointment) => appointment.status === 'booked'
-  ).slice(0, 3)
+    (appointment) => appointment?.status === 'booked'
+  ).slice(0, 3) as any
 
   const quickActions = [
     {
@@ -48,7 +48,6 @@ const Home = () => {
 
   return (
     <div className="space-y-8">
-      {/* Hero Section */}
       <div className="text-center">
         <h1 className="text-4xl font-bold text-gray-900 mb-4">
           Welcome to Appointment Booking System
@@ -58,7 +57,6 @@ const Home = () => {
         </p>
       </div>
 
-      {/* Quick Actions */}
       <div>
         <h2 className="text-2xl font-semibold text-gray-900 mb-6">Quick Actions</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -88,7 +86,6 @@ const Home = () => {
         </div>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center">
@@ -127,13 +124,12 @@ const Home = () => {
         </div>
       </div>
 
-      {/* Recent Appointments */}
       {upcomingAppointments.length > 0 && (
         <div>
           <h2 className="text-2xl font-semibold text-gray-900 mb-6">Recent Appointments</h2>
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
             <div className="divide-y divide-gray-200">
-              {upcomingAppointments.map((appointment) => (
+              {upcomingAppointments.map((appointment : any) => (
                 <div key={appointment.id} className="p-6">
                   <div className="flex items-center justify-between">
                     <div>

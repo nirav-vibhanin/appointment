@@ -32,14 +32,12 @@ const BookAppointment = () => {
     error: state.appointments.error.creating
   }))
 
-  console.log("patients" ,patients);
 
   const [selectedDoctor, setSelectedDoctor] = useState('')
   const [selectedDate, setSelectedDate] = useState('')
   const [availableSlots, setAvailableSlots] = useState<AppointmentSlot[]>([])
   const [loadingSlots, setLoadingSlots] = useState(false)
 
-  // Build a robust display label from varying API shapes
   const renderPatientLabel = (patient: any) => {
     const fn = (patient.firstName || '').trim()
     const ln = (patient.lastName || '').trim()
@@ -49,7 +47,6 @@ const BookAppointment = () => {
     return secondary ? `${primary} - ${secondary}` : primary
   }
 
-  // Lightweight single-select searchable dropdown (no external deps)
   const SearchableSelect = ({
     options,
     value,
@@ -120,14 +117,11 @@ const BookAppointment = () => {
 
   useEffect(() => {
     dispatch(fetchDoctors({ page: 1, limit: 100 }))
-    // Request a larger page size so the dropdown has enough patients
     dispatch(fetchPatients({ page: 1, limit: 100 }))
   }, [dispatch])
 
-  // Memoize list to avoid re-renders; native select will display all
   const patientList = useMemo(() => (patients || []), [patients])
 
-  // If previously selected doctor is not in the loaded list, clear it to avoid invalid IDs
   useEffect(() => {
     if (selectedDoctor && !(doctors || []).some((d: any) => String(d.id) === String(selectedDoctor))) {
       setSelectedDoctor('')
@@ -144,7 +138,6 @@ const BookAppointment = () => {
 
   const fetchAvailableSlots = async () => {
     if (!selectedDoctor || !selectedDate) return
-    // Ensure the selected doctor exists in the loaded list (avoid stale/static IDs)
     if (!(doctors || []).some((d: any) => String(d.id) === String(selectedDoctor))) {
       console.warn('Selected doctor not found in list, skipping slot fetch.')
       return
@@ -152,7 +145,6 @@ const BookAppointment = () => {
 
     setLoadingSlots(true)
     try {
-      // Include booked slots so we can show them disabled for transparency
       const slots = await appointmentApi.getAvailableSlots(selectedDoctor, selectedDate, true)
       setAvailableSlots(slots)
     } catch (error) {
@@ -203,7 +195,6 @@ const BookAppointment = () => {
         >
           {({ isSubmitting, setFieldValue, values }) => (
             <Form className="space-y-6">
-              {/* Patient Selection */}
               <div>
                 <label htmlFor="patientId" className="block text-sm font-medium text-gray-700 mb-2">
                   Patient
@@ -226,7 +217,6 @@ const BookAppointment = () => {
                 <ErrorMessage name="patientId" component="div" className="text-red-500 text-sm mt-1" />
               </div>
 
-              {/* Doctor Selection */}
               <div>
                 <label htmlFor="doctorId" className="block text-sm font-medium text-gray-700 mb-2">
                   Doctor
@@ -256,7 +246,6 @@ const BookAppointment = () => {
                 <ErrorMessage name="doctorId" component="div" className="text-red-500 text-sm mt-1" />
               </div>
 
-              {/* Date Selection */}
               <div>
                 <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-2">
                   Date
@@ -276,7 +265,6 @@ const BookAppointment = () => {
                 <ErrorMessage name="date" component="div" className="text-red-500 text-sm mt-1" />
               </div>
 
-              {/* Time Selection */}
               <div>
                 <label htmlFor="time" className="block text-sm font-medium text-gray-700 mb-2">
                   Time
@@ -309,7 +297,6 @@ const BookAppointment = () => {
                 <ErrorMessage name="time" component="div" className="text-red-500 text-sm mt-1" />
               </div>
 
-              {/* Notes */}
               <div>
                 <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-2">
                   Notes (Optional)
@@ -325,7 +312,6 @@ const BookAppointment = () => {
                 <ErrorMessage name="notes" component="div" className="text-red-500 text-sm mt-1" />
               </div>
 
-              {/* Submit Button */}
               <div className="flex justify-end space-x-4">
                 <button
                   type="button"

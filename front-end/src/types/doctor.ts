@@ -202,7 +202,6 @@ export interface CreateReviewRequest {
   comment: string;
 }
 
-// Utility types
 export type DoctorWithSchedule = Doctor & {
   schedule: DoctorSchedule[];
   reviews: DoctorReview[];

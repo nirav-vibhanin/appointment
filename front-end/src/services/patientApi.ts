@@ -18,7 +18,6 @@ import {
 export class PatientApiService {
   private readonly baseUrl = '/patients';
 
-  // Get all patients with filtering and pagination
   async getPatients(
     filters: PatientFilters = {},
     page: number = 1,
@@ -30,11 +29,9 @@ export class PatientApiService {
       ...this.buildFilterParams(filters),
     });
 
-    // Many backends wrap payloads as { success, data } or return a raw array
     const resp = await apiService.get<any>(`${this.baseUrl}?${params}`);
     const data = (resp && typeof resp === 'object' && 'data' in resp) ? (resp as any).data : resp;
 
-    // If backend returns an array of patients, normalize it into PatientListResponse
     if (Array.isArray(data)) {
       const normalizedPatients = data.map((p: any) => {
         const fullName: string = p.name || '';
@@ -42,7 +39,6 @@ export class PatientApiService {
         const firstName = parts[0] || '';
         const lastName = parts.slice(1).join(' ');
         return {
-          // Required fields (fallbacks where necessary)
           id: String(p.id),
           firstName,
           lastName,
@@ -55,9 +51,8 @@ export class PatientApiService {
           isActive: true,
           createdAt: p.createdAt || '',
           updatedAt: p.updatedAt || '',
-          // Preserve original name for display fallback
           name: p.name,
-        } as any; // Cast to satisfy Patient typing; UI only needs a subset
+        } as any; 
       });
 
       const total = normalizedPatients.length;
@@ -82,51 +77,41 @@ export class PatientApiService {
       } as PatientListResponse;
     }
 
-    // Otherwise assume it's already PatientListResponse
     return data as PatientListResponse;
   }
 
-  // Get patient by ID
   async getPatient(id: string): Promise<Patient> {
     return apiService.get<Patient>(`${this.baseUrl}/${id}`);
   }
 
-  // Get patient with appointments
   async getPatientWithAppointments(id: string): Promise<PatientWithAppointments> {
     return apiService.get<PatientWithAppointments>(`${this.baseUrl}/${id}/with-appointments`);
   }
 
-  // Create new patient
   async createPatient(data: CreatePatientRequest): Promise<Patient> {
     const patient = await apiService.post<Patient>(this.baseUrl, data);
     
-    // Invalidate related caches
     apiService.invalidateCache('patients');
     
     return patient;
   }
 
-  // Update patient
   async updatePatient(id: string, data: UpdatePatientRequest): Promise<Patient> {
     const patient = await apiService.put<Patient>(`${this.baseUrl}/${id}`, data);
     
-    // Invalidate related caches
     apiService.invalidateCache('patients');
     apiService.invalidateCache(`patients/${id}`);
     
     return patient;
   }
 
-  // Delete patient
   async deletePatient(id: string): Promise<void> {
     await apiService.delete<void>(`${this.baseUrl}/${id}`);
     
-    // Invalidate related caches
     apiService.invalidateCache('patients');
     apiService.invalidateCache(`patients/${id}`);
   }
 
-  // Deactivate patient
   async deactivatePatient(id: string, reason?: string): Promise<Patient> {
     return this.updatePatient(id, {
       isActive: false,
@@ -134,12 +119,10 @@ export class PatientApiService {
     });
   }
 
-  // Reactivate patient
   async reactivatePatient(id: string): Promise<Patient> {
     return this.updatePatient(id, { isActive: true });
   }
 
-  // Get patient statistics
   async getPatientStats(filters?: PatientFilters): Promise<PatientStats> {
     const params = filters ? this.buildFilterParams(filters || ({} as PatientFilters)) : {};
     const queryString = new URLSearchParams(params).toString();
@@ -147,7 +130,6 @@ export class PatientApiService {
     return apiService.get<PatientStats>(`${this.baseUrl}/stats${queryString ? `?${queryString}` : ''}`);
   }
 
-  // Search patients
   async searchPatients(
     query: string,
     filters?: PatientFilters,
@@ -164,7 +146,6 @@ export class PatientApiService {
     return apiService.get<PatientSearchResponse>(`${this.baseUrl}/search?${params}`);
   }
 
-  // Get patients by doctor
   async getPatientsByDoctor(
     doctorId: string,
     page: number = 1,
@@ -179,7 +160,6 @@ export class PatientApiService {
     return apiService.get<PatientListResponse>(`${this.baseUrl}/by-doctor/${doctorId}?${params}`);
   }
 
-  // Get patients by insurance provider
   async getPatientsByInsurance(
     provider: InsuranceProvider,
     page: number = 1,
@@ -194,7 +174,6 @@ export class PatientApiService {
     return apiService.get<PatientListResponse>(`${this.baseUrl}/by-insurance?${params}`);
   }
 
-  // Get patients by age group
   async getPatientsByAgeGroup(
     ageGroup: string,
     page: number = 1,
@@ -209,7 +188,6 @@ export class PatientApiService {
     return apiService.get<PatientListResponse>(`${this.baseUrl}/by-age-group?${params}`);
   }
 
-  // Get patients by location
   async getPatientsByLocation(
     city?: string,
     state?: string,
@@ -226,7 +204,6 @@ export class PatientApiService {
     return apiService.get<PatientListResponse>(`${this.baseUrl}/by-location?${params}`);
   }
 
-  // Get new patients
   async getNewPatients(
     days: number = 30,
     page: number = 1,
@@ -241,7 +218,6 @@ export class PatientApiService {
     return apiService.get<PatientListResponse>(`${this.baseUrl}/new?${params}`);
   }
 
-  // Get inactive patients
   async getInactivePatients(
     page: number = 1,
     limit: number = 10
@@ -254,7 +230,6 @@ export class PatientApiService {
     return apiService.get<PatientListResponse>(`${this.baseUrl}/inactive?${params}`);
   }
 
-  // Export patients
   async exportPatients(
     format: 'csv' | 'pdf' | 'excel',
     filters?: PatientFilters
@@ -271,7 +246,6 @@ export class PatientApiService {
     return response;
   }
 
-  // Bulk operations
   async bulkUpdatePatients(
     patientIds: string[],
     updates: Partial<UpdatePatientRequest>
@@ -281,7 +255,6 @@ export class PatientApiService {
       updates,
     });
     
-    // Invalidate related caches
     apiService.invalidateCache('patients');
     
     return patients;
@@ -298,7 +271,6 @@ export class PatientApiService {
     return this.bulkUpdatePatients(patientIds, { isActive: true });
   }
 
-  // Patient medical history
   async updateMedicalHistory(
     patientId: string,
     medicalHistory: any
@@ -306,7 +278,6 @@ export class PatientApiService {
     return apiService.put<Patient>(`${this.baseUrl}/${patientId}/medical-history`, medicalHistory);
   }
 
-  // Patient insurance
   async updateInsurance(
     patientId: string,
     insurance: any
@@ -314,7 +285,6 @@ export class PatientApiService {
     return apiService.put<Patient>(`${this.baseUrl}/${patientId}/insurance`, insurance);
   }
 
-  // Patient emergency contact
   async updateEmergencyContact(
     patientId: string,
     emergencyContact: any
@@ -322,7 +292,6 @@ export class PatientApiService {
     return apiService.put<Patient>(`${this.baseUrl}/${patientId}/emergency-contact`, emergencyContact);
   }
 
-  // Patient allergies
   async updateAllergies(
     patientId: string,
     allergies: string[]
@@ -330,7 +299,6 @@ export class PatientApiService {
     return apiService.put<Patient>(`${this.baseUrl}/${patientId}/allergies`, { allergies });
   }
 
-  // Patient medications
   async updateMedications(
     patientId: string,
     medications: string[]
@@ -338,7 +306,6 @@ export class PatientApiService {
     return apiService.put<Patient>(`${this.baseUrl}/${patientId}/medications`, { medications });
   }
 
-  // Patient notes
   async addPatientNote(
     patientId: string,
     note: string
@@ -346,7 +313,6 @@ export class PatientApiService {
     return apiService.post<Patient>(`${this.baseUrl}/${patientId}/notes`, { note });
   }
 
-  // Patient documents
   async uploadPatientDocument(
     patientId: string,
     file: File,
@@ -368,12 +334,10 @@ export class PatientApiService {
     await apiService.delete<void>(`${this.baseUrl}/${patientId}/documents/${documentId}`);
   }
 
-  // Patient verification
   async verifyPatient(patientId: string): Promise<Patient> {
     return apiService.post<Patient>(`${this.baseUrl}/${patientId}/verify`);
   }
 
-  // Patient duplicate check
   async checkDuplicatePatient(data: Partial<CreatePatientRequest>): Promise<{
     isDuplicate: boolean;
     potentialMatches: Patient[];
@@ -384,7 +348,6 @@ export class PatientApiService {
     }>(`${this.baseUrl}/check-duplicate`, data);
   }
 
-  // Patient merge
   async mergePatients(
     primaryPatientId: string,
     secondaryPatientId: string
@@ -395,7 +358,6 @@ export class PatientApiService {
     });
   }
 
-  // Helper method to build filter parameters
   private buildFilterParams(filters: PatientFilters): Record<string, string> {
     const params: Record<string, string> = {};
 
@@ -439,5 +401,4 @@ export class PatientApiService {
   }
 }
 
-// Export singleton instance
 export const patientApi = new PatientApiService();

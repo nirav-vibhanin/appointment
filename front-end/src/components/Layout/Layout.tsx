@@ -19,7 +19,6 @@ const Layout = ({ children }: LayoutProps) => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Navigation */}
       <nav className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
@@ -54,7 +53,6 @@ const Layout = ({ children }: LayoutProps) => {
         </div>
       </nav>
 
-      {/* Mobile Navigation */}
       <div className="sm:hidden">
         <div className="pt-2 pb-3 space-y-1">
           {navigation.map((item) => {
@@ -80,7 +78,6 @@ const Layout = ({ children }: LayoutProps) => {
         </div>
       </div>
 
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
           {children}

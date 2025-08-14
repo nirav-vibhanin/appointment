@@ -18,7 +18,6 @@ import {
   CreateReviewRequest,
 } from '../../types/doctor';
 
-// Async thunks
 export const fetchDoctors = createAsyncThunk(
   'doctors/fetchDoctors',
   async (
@@ -214,15 +213,12 @@ export const fetchDoctorPerformance = createAsyncThunk(
   }
 );
 
-// State interface
 interface DoctorState {
-  // Doctors list
   doctors: Doctor[];
   selectedDoctor: Doctor | null;
   selectedDoctorWithSchedule: DoctorWithSchedule | null;
   selectedDoctorDetail: DoctorDetailResponse | null;
   
-  // Pagination
   pagination: {
     page: number;
     limit: number;
@@ -230,13 +226,10 @@ interface DoctorState {
     totalPages: number;
   };
   
-  // Filters
   filters: DoctorFilters;
   
-  // Statistics
   stats: DoctorStats | null;
   
-  // Search results
   searchResults: DoctorSearchResult[];
   searchPagination: {
     page: number;
@@ -245,7 +238,6 @@ interface DoctorState {
     totalPages: number;
   };
   
-  // Filtered results
   doctorsBySpecialization: Doctor[];
   doctorsBySpecializationPagination: {
     page: number;
@@ -279,7 +271,6 @@ interface DoctorState {
     totalPages: number;
   };
   
-  // Reviews
   doctorReviews: DoctorReview[];
   doctorReviewsPagination: {
     page: number;
@@ -288,7 +279,6 @@ interface DoctorState {
     totalPages: number;
   };
   
-  // Performance
   doctorPerformance: {
     totalAppointments: number;
     completedAppointments: number;
@@ -299,7 +289,6 @@ interface DoctorState {
     completionRate: number;
   } | null;
   
-  // Loading states
   loading: {
     doctors: boolean;
     doctor: boolean;
@@ -326,7 +315,6 @@ interface DoctorState {
     performance: boolean;
   };
   
-  // Error states
   error: {
     doctors: string | null;
     doctor: string | null;
@@ -354,7 +342,6 @@ interface DoctorState {
   };
 }
 
-// Initial state
 const initialState: DoctorState = {
   doctors: [],
   selectedDoctor: null,
@@ -464,50 +451,41 @@ const initialState: DoctorState = {
   },
 };
 
-// Slice
 const doctorSlice = createSlice({
   name: 'doctors',
   initialState,
   reducers: {
-    // Clear selected doctor
     clearSelectedDoctor: (state) => {
       state.selectedDoctor = null;
       state.selectedDoctorWithSchedule = null;
       state.selectedDoctorDetail = null;
     },
     
-    // Set filters
     setFilters: (state, action: PayloadAction<DoctorFilters>) => {
       state.filters = action.payload;
     },
     
-    // Clear filters
     clearFilters: (state) => {
       state.filters = {};
     },
     
-    // Set pagination
     setPagination: (state, action: PayloadAction<{ page: number; limit: number }>) => {
       state.pagination = { ...state.pagination, ...action.payload };
     },
     
-    // Clear errors
     clearError: (state, action: PayloadAction<keyof DoctorState['error']>) => {
       state.error[action.payload] = null;
     },
     
-    // Clear all errors
     clearAllErrors: (state) => {
       Object.keys(state.error).forEach((key) => {
         state.error[key as keyof DoctorState['error']] = null;
       });
     },
     
-    // Reset state
     resetDoctorState: () => initialState,
   },
   extraReducers: (builder) => {
-    // Fetch doctors
     builder
       .addCase(fetchDoctors.pending, (state) => {
         state.loading.doctors = true;
@@ -524,7 +502,6 @@ const doctorSlice = createSlice({
         state.error.doctors = action.error.message || 'Failed to fetch doctors';
       });
 
-    // Fetch single doctor
     builder
       .addCase(fetchDoctor.pending, (state) => {
         state.loading.doctor = true;
@@ -539,7 +516,6 @@ const doctorSlice = createSlice({
         state.error.doctor = action.error.message || 'Failed to fetch doctor';
       });
 
-    // Fetch doctor with schedule
     builder
       .addCase(fetchDoctorWithSchedule.pending, (state) => {
         state.loading.doctorWithSchedule = true;
@@ -554,7 +530,6 @@ const doctorSlice = createSlice({
         state.error.doctorWithSchedule = action.error.message || 'Failed to fetch doctor with schedule';
       });
 
-    // Fetch doctor detail
     builder
       .addCase(fetchDoctorDetail.pending, (state) => {
         state.loading.doctorDetail = true;
@@ -569,7 +544,6 @@ const doctorSlice = createSlice({
         state.error.doctorDetail = action.error.message || 'Failed to fetch doctor detail';
       });
 
-    // Create doctor
     builder
       .addCase(createDoctor.pending, (state) => {
         state.loading.creating = true;
@@ -585,7 +559,6 @@ const doctorSlice = createSlice({
         state.error.creating = action.error.message || 'Failed to create doctor';
       });
 
-    // Update doctor
     builder
       .addCase(updateDoctor.pending, (state) => {
         state.loading.updating = true;
@@ -612,7 +585,6 @@ const doctorSlice = createSlice({
         state.error.updating = action.error.message || 'Failed to update doctor';
       });
 
-    // Delete doctor
     builder
       .addCase(deleteDoctor.pending, (state) => {
         state.loading.deleting = true;
@@ -637,7 +609,6 @@ const doctorSlice = createSlice({
         state.error.deleting = action.error.message || 'Failed to delete doctor';
       });
 
-    // Deactivate doctor
     builder
       .addCase(deactivateDoctor.pending, (state) => {
         state.loading.deactivating = true;
@@ -664,7 +635,6 @@ const doctorSlice = createSlice({
         state.error.deactivating = action.error.message || 'Failed to deactivate doctor';
       });
 
-    // Reactivate doctor
     builder
       .addCase(reactivateDoctor.pending, (state) => {
         state.loading.reactivating = true;
@@ -691,7 +661,6 @@ const doctorSlice = createSlice({
         state.error.reactivating = action.error.message || 'Failed to reactivate doctor';
       });
 
-    // Fetch doctor stats
     builder
       .addCase(fetchDoctorStats.pending, (state) => {
         state.loading.stats = true;
@@ -706,7 +675,6 @@ const doctorSlice = createSlice({
         state.error.stats = action.error.message || 'Failed to fetch doctor stats';
       });
 
-    // Search doctors
     builder
       .addCase(searchDoctors.pending, (state) => {
         state.loading.searching = true;
@@ -727,7 +695,6 @@ const doctorSlice = createSlice({
         state.error.searching = action.error.message || 'Failed to search doctors';
       });
 
-    // Fetch doctors by specialization
     builder
       .addCase(fetchDoctorsBySpecialization.pending, (state) => {
         state.loading.doctorsBySpecialization = true;
@@ -743,7 +710,6 @@ const doctorSlice = createSlice({
         state.error.doctorsBySpecialization = action.error.message || 'Failed to fetch doctors by specialization';
       });
 
-    // Fetch available doctors
     builder
       .addCase(fetchAvailableDoctors.pending, (state) => {
         state.loading.availableDoctors = true;
@@ -759,7 +725,6 @@ const doctorSlice = createSlice({
         state.error.availableDoctors = action.error.message || 'Failed to fetch available doctors';
       });
 
-    // Fetch top rated doctors
     builder
       .addCase(fetchTopRatedDoctors.pending, (state) => {
         state.loading.topRatedDoctors = true;
@@ -774,7 +739,6 @@ const doctorSlice = createSlice({
         state.error.topRatedDoctors = action.error.message || 'Failed to fetch top rated doctors';
       });
 
-    // Fetch verified doctors
     builder
       .addCase(fetchVerifiedDoctors.pending, (state) => {
         state.loading.verifiedDoctors = true;
@@ -790,7 +754,6 @@ const doctorSlice = createSlice({
         state.error.verifiedDoctors = action.error.message || 'Failed to fetch verified doctors';
       });
 
-    // Fetch new doctors
     builder
       .addCase(fetchNewDoctors.pending, (state) => {
         state.loading.newDoctors = true;
@@ -806,7 +769,6 @@ const doctorSlice = createSlice({
         state.error.newDoctors = action.error.message || 'Failed to fetch new doctors';
       });
 
-    // Bulk update doctors
     builder
       .addCase(bulkUpdateDoctors.pending, (state) => {
         state.loading.bulkUpdating = true;
@@ -814,7 +776,6 @@ const doctorSlice = createSlice({
       })
       .addCase(bulkUpdateDoctors.fulfilled, (state, action) => {
         state.loading.bulkUpdating = false;
-        // Update doctors in the list
         action.payload.forEach(updatedDoctor => {
           const index = state.doctors.findIndex(doctor => doctor.id === updatedDoctor.id);
           if (index !== -1) {
@@ -827,7 +788,6 @@ const doctorSlice = createSlice({
         state.error.bulkUpdating = action.error.message || 'Failed to bulk update doctors';
       });
 
-    // Bulk deactivate doctors
     builder
       .addCase(bulkDeactivateDoctors.pending, (state) => {
         state.loading.bulkDeactivating = true;
@@ -835,7 +795,6 @@ const doctorSlice = createSlice({
       })
       .addCase(bulkDeactivateDoctors.fulfilled, (state, action) => {
         state.loading.bulkDeactivating = false;
-        // Update doctors in the list
         action.payload.forEach(updatedDoctor => {
           const index = state.doctors.findIndex(doctor => doctor.id === updatedDoctor.id);
           if (index !== -1) {
@@ -848,7 +807,6 @@ const doctorSlice = createSlice({
         state.error.bulkDeactivating = action.error.message || 'Failed to bulk deactivate doctors';
       });
 
-    // Bulk reactivate doctors
     builder
       .addCase(bulkReactivateDoctors.pending, (state) => {
         state.loading.bulkReactivating = true;
@@ -856,7 +814,6 @@ const doctorSlice = createSlice({
       })
       .addCase(bulkReactivateDoctors.fulfilled, (state, action) => {
         state.loading.bulkReactivating = false;
-        // Update doctors in the list
         action.payload.forEach(updatedDoctor => {
           const index = state.doctors.findIndex(doctor => doctor.id === updatedDoctor.id);
           if (index !== -1) {
@@ -869,7 +826,6 @@ const doctorSlice = createSlice({
         state.error.bulkReactivating = action.error.message || 'Failed to bulk reactivate doctors';
       });
 
-    // Verify doctor
     builder
       .addCase(verifyDoctor.pending, (state) => {
         state.loading.verifying = true;
@@ -896,7 +852,6 @@ const doctorSlice = createSlice({
         state.error.verifying = action.error.message || 'Failed to verify doctor';
       });
 
-    // Fetch doctor reviews
     builder
       .addCase(fetchDoctorReviews.pending, (state) => {
         state.loading.reviews = true;
@@ -912,7 +867,6 @@ const doctorSlice = createSlice({
         state.error.reviews = action.error.message || 'Failed to fetch doctor reviews';
       });
 
-    // Create doctor review
     builder
       .addCase(createDoctorReview.pending, (state) => {
         state.loading.creatingReview = true;
@@ -928,7 +882,6 @@ const doctorSlice = createSlice({
         state.error.creatingReview = action.error.message || 'Failed to create doctor review';
       });
 
-    // Fetch doctor performance
     builder
       .addCase(fetchDoctorPerformance.pending, (state) => {
         state.loading.performance = true;
@@ -945,7 +898,6 @@ const doctorSlice = createSlice({
   },
 });
 
-// Export actions
 export const {
   clearSelectedDoctor,
   setFilters,
@@ -956,7 +908,6 @@ export const {
   resetDoctorState,
 } = doctorSlice.actions;
 
-// Export selectors
 export const selectDoctors = (state: { doctors: DoctorState }) => state.doctors.doctors;
 export const selectSelectedDoctor = (state: { doctors: DoctorState }) => state.doctors.selectedDoctor;
 export const selectSelectedDoctorWithSchedule = (state: { doctors: DoctorState }) => state.doctors.selectedDoctorWithSchedule;
@@ -981,5 +932,4 @@ export const selectDoctorPerformance = (state: { doctors: DoctorState }) => stat
 export const selectLoading = (state: { doctors: DoctorState }) => state.doctors.loading;
 export const selectError = (state: { doctors: DoctorState }) => state.doctors.error;
 
-// Export reducer
 export default doctorSlice.reducer;

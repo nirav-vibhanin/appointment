@@ -50,7 +50,6 @@ const DoctorDetail = () => {
 
   return (
     <div className="space-y-6">
-      {/* Back Button */}
       <Link
         to="/doctors"
         className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-6"
@@ -59,7 +58,6 @@ const DoctorDetail = () => {
         Back to Doctors
       </Link>
 
-      {/* Doctor Header */}
       <div className="card">
         <div className="flex items-start space-x-6">
           <div className="bg-primary-100 p-4 rounded-lg">
@@ -67,7 +65,7 @@ const DoctorDetail = () => {
           </div>
           <div className="flex-1">
             <h1 className="text-3xl font-bold text-gray-900">
-              Dr. {selectedDoctor.name}
+              Dr. {selectedDoctor?.name}
             </h1>
             <p className="text-xl text-gray-600 mt-2">{selectedDoctor.specialization}</p>
             <div className="flex items-center space-x-2 mt-4">
@@ -78,7 +76,6 @@ const DoctorDetail = () => {
         </div>
       </div>
 
-      {/* Contact Information */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="card">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Contact Information</h2>
@@ -122,23 +119,22 @@ const DoctorDetail = () => {
                 <p className="font-medium text-gray-900">View My Appointments</p>
                 <p className="text-sm text-gray-700">Check your schedule</p>
               </div>
-            </Link>
+            </Link> 
           </div>
         </div>
       </div>
 
-      {/* Doctor Information */}
       <div className="card">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">About Dr. {selectedDoctor.name}</h2>
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">About Dr. {selectedDoctor?.name}</h2>
         <div className="prose max-w-none">
           <p className="text-gray-600">
-            Dr. {selectedDoctor.name} is a qualified medical professional specializing in{' '}
-            {selectedDoctor.specialization.toLowerCase()}. With years of experience in the field,
-            Dr. {selectedDoctor.name} is committed to providing high-quality healthcare services
+            Dr. {selectedDoctor?.name} is a qualified medical professional specializing in{' '}
+            {selectedDoctor?.specialization.toLowerCase()}. With years of experience in the field,
+            Dr. {selectedDoctor?.name} is committed to providing high-quality healthcare services
             to patients.
           </p>
           <p className="text-gray-600 mt-4">
-            To schedule an appointment with Dr. {selectedDoctor.name}, please use the booking
+            To schedule an appointment with Dr. {selectedDoctor?.name}, please use the booking
             system above or contact the office directly.
           </p>
         </div>

@@ -6,7 +6,6 @@ import { fetchDoctors } from './store/slices/doctorSlice'
 import { fetchPatients } from './store/slices/patientSlice'
 import { fetchAppointments } from './store/slices/appointmentSlice'
 
-// Components
 import Layout from './components/Layout/Layout'
 import Home from './pages/Home'
 import BookAppointment from './pages/BookAppointment'

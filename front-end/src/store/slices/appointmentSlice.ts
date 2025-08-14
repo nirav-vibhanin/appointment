@@ -156,13 +156,10 @@ export const searchAppointments = createAsyncThunk(
   }
 );
 
-// State interface
 interface AppointmentState {
-  // Appointments list
   appointments: Appointment[];
   selectedAppointment: Appointment | null;
   
-  // Pagination
   pagination: {
     page: number;
     limit: number;
@@ -170,19 +167,14 @@ interface AppointmentState {
     totalPages: number;
   };
   
-  // Filters
   filters: AppointmentFilters;
   
-  // Statistics
   stats: AppointmentStats | null;
   
-  // Calendar
   calendar: AppointmentCalendar[];
   
-  // Time slots
   availableTimeSlots: TimeSlot[];
   
-  // Patient appointments
   patientAppointments: Appointment[];
   patientAppointmentsPagination: {
     page: number;
@@ -191,7 +183,6 @@ interface AppointmentState {
     totalPages: number;
   };
   
-  // Doctor appointments
   doctorAppointments: Appointment[];
   doctorAppointmentsPagination: {
     page: number;
@@ -200,10 +191,8 @@ interface AppointmentState {
     totalPages: number;
   };
   
-  // Upcoming appointments
   upcomingAppointments: Appointment[];
   
-  // Past appointments
   pastAppointments: Appointment[];
   pastAppointmentsPagination: {
     page: number;
@@ -212,7 +201,6 @@ interface AppointmentState {
     totalPages: number;
   };
   
-  // Search results
   searchResults: Appointment[];
   searchPagination: {
     page: number;
@@ -221,7 +209,6 @@ interface AppointmentState {
     totalPages: number;
   };
   
-  // Loading states
   loading: {
     appointments: boolean;
     appointment: boolean;
@@ -242,7 +229,6 @@ interface AppointmentState {
     searching: boolean;
   };
   
-  // Error states
   error: {
     appointments: string | null;
     appointment: string | null;
@@ -264,7 +250,6 @@ interface AppointmentState {
   };
 }
 
-// Initial state
 const initialState: AppointmentState = {
   appointments: [],
   selectedAppointment: null,
@@ -347,48 +332,39 @@ const initialState: AppointmentState = {
   },
 };
 
-// Slice
 const appointmentSlice = createSlice({
   name: 'appointments',
   initialState,
   reducers: {
-    // Clear selected appointment
     clearSelectedAppointment: (state) => {
       state.selectedAppointment = null;
     },
     
-    // Set filters
     setFilters: (state, action: PayloadAction<AppointmentFilters>) => {
       state.filters = action.payload;
     },
     
-    // Clear filters
     clearFilters: (state) => {
       state.filters = {};
     },
     
-    // Set pagination
     setPagination: (state, action: PayloadAction<{ page: number; limit: number }>) => {
       state.pagination = { ...state.pagination, ...action.payload };
     },
     
-    // Clear errors
     clearError: (state, action: PayloadAction<keyof AppointmentState['error']>) => {
       state.error[action.payload] = null;
     },
     
-    // Clear all errors
     clearAllErrors: (state) => {
       Object.keys(state.error).forEach((key) => {
         state.error[key as keyof AppointmentState['error']] = null;
       });
     },
     
-    // Reset state
     resetAppointmentState: () => initialState,
   },
   extraReducers: (builder) => {
-    // Fetch appointments
     builder
       .addCase(fetchAppointments.pending, (state) => {
         state.loading.appointments = true;
@@ -405,7 +381,6 @@ const appointmentSlice = createSlice({
         state.error.appointments = action.error.message || 'Failed to fetch appointments';
       });
 
-    // Fetch single appointment
     builder
       .addCase(fetchAppointment.pending, (state) => {
         state.loading.appointment = true;
@@ -420,7 +395,6 @@ const appointmentSlice = createSlice({
         state.error.appointment = action.error.message || 'Failed to fetch appointment';
       });
 
-    // Create appointment
     builder
       .addCase(createAppointment.pending, (state) => {
         state.loading.creating = true;
@@ -436,7 +410,6 @@ const appointmentSlice = createSlice({
         state.error.creating = action.error.message || 'Failed to create appointment';
       });
 
-    // Update appointment
     builder
       .addCase(updateAppointment.pending, (state) => {
         state.loading.updating = true;
@@ -457,7 +430,6 @@ const appointmentSlice = createSlice({
         state.error.updating = action.error.message || 'Failed to update appointment';
       });
 
-    // Delete appointment
     builder
       .addCase(deleteAppointment.pending, (state) => {
         state.loading.deleting = true;
@@ -476,7 +448,6 @@ const appointmentSlice = createSlice({
         state.error.deleting = action.error.message || 'Failed to delete appointment';
       });
 
-    // Cancel appointment
     builder
       .addCase(cancelAppointment.pending, (state) => {
         state.loading.cancelling = true;
@@ -497,7 +468,6 @@ const appointmentSlice = createSlice({
         state.error.cancelling = action.error.message || 'Failed to cancel appointment';
       });
 
-    // Reschedule appointment
     builder
       .addCase(rescheduleAppointment.pending, (state) => {
         state.loading.rescheduling = true;
@@ -518,7 +488,6 @@ const appointmentSlice = createSlice({
         state.error.rescheduling = action.error.message || 'Failed to reschedule appointment';
       });
 
-    // Confirm appointment
     builder
       .addCase(confirmAppointment.pending, (state) => {
         state.loading.confirming = true;
@@ -539,7 +508,6 @@ const appointmentSlice = createSlice({
         state.error.confirming = action.error.message || 'Failed to confirm appointment';
       });
 
-    // Complete appointment
     builder
       .addCase(completeAppointment.pending, (state) => {
         state.loading.completing = true;
@@ -560,7 +528,6 @@ const appointmentSlice = createSlice({
         state.error.completing = action.error.message || 'Failed to complete appointment';
       });
 
-    // Fetch appointment stats
     builder
       .addCase(fetchAppointmentStats.pending, (state) => {
         state.loading.stats = true;
@@ -575,7 +542,6 @@ const appointmentSlice = createSlice({
         state.error.stats = action.error.message || 'Failed to fetch appointment stats';
       });
 
-    // Fetch appointment calendar
     builder
       .addCase(fetchAppointmentCalendar.pending, (state) => {
         state.loading.calendar = true;
@@ -591,7 +557,6 @@ const appointmentSlice = createSlice({
         state.error.calendar = action.error.message || 'Failed to fetch appointment calendar';
       });
 
-    // Fetch available time slots
     builder
       .addCase(fetchAvailableTimeSlots.pending, (state) => {
         state.loading.timeSlots = true;
@@ -606,7 +571,6 @@ const appointmentSlice = createSlice({
         state.error.timeSlots = action.error.message || 'Failed to fetch available time slots';
       });
 
-    // Fetch patient appointments
     builder
       .addCase(fetchPatientAppointments.pending, (state) => {
         state.loading.patientAppointments = true;
@@ -622,7 +586,6 @@ const appointmentSlice = createSlice({
         state.error.patientAppointments = action.error.message || 'Failed to fetch patient appointments';
       });
 
-    // Fetch doctor appointments
     builder
       .addCase(fetchDoctorAppointments.pending, (state) => {
         state.loading.doctorAppointments = true;
@@ -638,7 +601,6 @@ const appointmentSlice = createSlice({
         state.error.doctorAppointments = action.error.message || 'Failed to fetch doctor appointments';
       });
 
-    // Fetch upcoming appointments
     builder
       .addCase(fetchUpcomingAppointments.pending, (state) => {
         state.loading.upcomingAppointments = true;
@@ -653,7 +615,6 @@ const appointmentSlice = createSlice({
         state.error.upcomingAppointments = action.error.message || 'Failed to fetch upcoming appointments';
       });
 
-    // Fetch past appointments
     builder
       .addCase(fetchPastAppointments.pending, (state) => {
         state.loading.pastAppointments = true;
@@ -669,7 +630,6 @@ const appointmentSlice = createSlice({
         state.error.pastAppointments = action.error.message || 'Failed to fetch past appointments';
       });
 
-    // Search appointments
     builder
       .addCase(searchAppointments.pending, (state) => {
         state.loading.searching = true;
@@ -687,7 +647,6 @@ const appointmentSlice = createSlice({
   },
 });
 
-// Export actions
 export const {
   clearSelectedAppointment,
   setFilters,
@@ -698,7 +657,6 @@ export const {
   resetAppointmentState,
 } = appointmentSlice.actions;
 
-// Export selectors
 export const selectAppointments = (state: { appointments: AppointmentState }) => state.appointments.appointments;
 export const selectSelectedAppointment = (state: { appointments: AppointmentState }) => state.appointments.selectedAppointment;
 export const selectPagination = (state: { appointments: AppointmentState }) => state.appointments.pagination;
@@ -714,5 +672,4 @@ export const selectSearchResults = (state: { appointments: AppointmentState }) =
 export const selectLoading = (state: { appointments: AppointmentState }) => state.appointments.loading;
 export const selectError = (state: { appointments: AppointmentState }) => state.appointments.error;
 
-// Export reducer
 export default appointmentSlice.reducer;

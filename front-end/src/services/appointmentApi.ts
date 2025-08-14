@@ -16,7 +16,6 @@ import {
 export class AppointmentApiService {
   private readonly baseUrl = '/appointments';
 
-  // Get all appointments with filtering and pagination
   async getAppointments(
     filters: AppointmentFilters = {},
     page: number = 1,
@@ -28,8 +27,6 @@ export class AppointmentApiService {
       ...this.buildFilterParams(filters),
     });
     const res = await apiService.get<any>(`${this.baseUrl}?${params}`);
-    // Normalize shapes into AppointmentListResponse
-    // 1) Raw array
     if (Array.isArray(res)) {
       return {
         appointments: res as Appointment[],
@@ -37,7 +34,6 @@ export class AppointmentApiService {
         stats: undefined as any,
       } as unknown as AppointmentListResponse;
     }
-    // 2) ApiResponse wrapper { data: [] }
     if (res && Array.isArray(res.data)) {
       const list = res.data as Appointment[];
       return {
@@ -46,11 +42,9 @@ export class AppointmentApiService {
         stats: res.stats ?? (undefined as any),
       } as unknown as AppointmentListResponse;
     }
-    // 3) Already correct
     if (res && Array.isArray(res.appointments)) {
       return res as AppointmentListResponse;
     }
-    // Fallback empty
     return {
       appointments: [],
       pagination: { page, limit, total: 0, totalPages: 0 },
@@ -58,63 +52,50 @@ export class AppointmentApiService {
     } as unknown as AppointmentListResponse;
   }
 
-  // Get appointment by ID
   async getAppointment(id: string): Promise<Appointment> {
     return apiService.get<Appointment>(`${this.baseUrl}/${id}`);
   }
 
-  // Create new appointment
   async createAppointment(data: CreateAppointmentRequest): Promise<Appointment> {
     const appointment = await apiService.post<Appointment>(this.baseUrl, data);
     
-    // Invalidate related caches
     apiService.invalidateCache('appointments');
     apiService.invalidateCache('doctors');
     apiService.invalidateCache('patients');
-    // Also invalidate slots so availability refreshes
     apiService.invalidateCache('appointments/slots');
     
     return appointment;
   }
 
-  // Update appointment
   async updateAppointment(id: string, data: UpdateAppointmentRequest): Promise<Appointment> {
     const appointment = await apiService.put<Appointment>(`${this.baseUrl}/${id}`, data);
     
-    // Invalidate related caches
     apiService.invalidateCache('appointments');
     apiService.invalidateCache(`appointments/${id}`);
     
     return appointment;
   }
 
-  // Delete appointment
   async deleteAppointment(id: string): Promise<void> {
     await apiService.delete<void>(`${this.baseUrl}/${id}`);
     
-    // Invalidate related caches
     apiService.invalidateCache('appointments');
     apiService.invalidateCache(`appointments/${id}`);
   }
 
-  // Cancel appointment
   async cancelAppointment(id: string, reason?: string): Promise<Appointment> {
-    // Backend frees the slot on cancel: PATCH /appointments/:id/cancel
     const appointment = await apiService.patch<Appointment>(`${this.baseUrl}/${id}/cancel`, {
       reason,
     });
-    // Invalidate caches and slots
     apiService.invalidateCache('appointments');
     apiService.invalidateCache(`appointments/${id}`);
     apiService.invalidateCache('appointments/slots');
     return appointment;
   }
 
-  // Reschedule appointment
   async rescheduleAppointment(id: string, data: RescheduleAppointmentRequest): Promise<Appointment> {
     const appointment = await apiService.post<Appointment>(`${this.baseUrl}/${id}/reschedule`, data);
     
-    // Invalidate related caches
     apiService.invalidateCache('appointments');
     apiService.invalidateCache(`appointments/${id}`);
     apiService.invalidateCache('doctors');
@@ -122,12 +103,10 @@ export class AppointmentApiService {
     return appointment;
   }
 
-  // Confirm appointment
   async confirmAppointment(id: string): Promise<Appointment> {
     return this.updateAppointment(id, { status: AppointmentStatus.CONFIRMED });
   }
 
-  // Mark appointment as completed
   async completeAppointment(id: string, diagnosis?: string, prescription?: string): Promise<Appointment> {
     const data: UpdateAppointmentRequest = {
       status: AppointmentStatus.COMPLETED,
@@ -138,7 +117,6 @@ export class AppointmentApiService {
     return this.updateAppointment(id, data);
   }
 
-  // Get appointment statistics
   async getAppointmentStats(filters?: AppointmentFilters): Promise<AppointmentStats> {
     const params = filters ? this.buildFilterParams(filters) : {};
     const queryString = new URLSearchParams(params).toString();
@@ -146,7 +124,6 @@ export class AppointmentApiService {
     return apiService.get<AppointmentStats>(`${this.baseUrl}/stats${queryString ? `?${queryString}` : ''}`);
   }
 
-  // Get appointment calendar
   async getAppointmentCalendar(
     startDate: string,
     endDate: string,
@@ -161,47 +138,37 @@ export class AppointmentApiService {
     return apiService.get<AppointmentCalendarResponse>(`${this.baseUrl}/calendar?${params}`);
   }
 
-  // Get time slots for a doctor on a specific date
   async getAvailableTimeSlots(doctorId: string, date: string, includeBooked: boolean = false): Promise<TimeSlot[]> {
     const params = new URLSearchParams({ doctorId, date, ...(includeBooked ? { includeBooked: 'true' } : {}) });
-    // Backend route: GET /appointments/slots/available?doctorId=...&date=...&includeBooked=true
     return apiService.get<TimeSlot[]>(`${this.baseUrl}/slots/available?${params}`);
   }
 
-  // Alias for backward compatibility
   async getAvailableSlots(doctorId: string, date: string, includeBooked: boolean = false): Promise<TimeSlot[]> {
     return this.getAvailableTimeSlots(doctorId, date, includeBooked);
   }
 
-  // Get time slots by ID
   async getTimeSlot(id: string): Promise<TimeSlot> {
     return apiService.get<TimeSlot>(`${this.baseUrl}/time-slots/${id}`);
   }
 
-  // Create time slot
   async createTimeSlot(data: Partial<TimeSlot>): Promise<TimeSlot> {
     return apiService.post<TimeSlot>(`${this.baseUrl}/time-slots`, data);
   }
 
-  // Update time slot
   async updateTimeSlot(id: string, data: Partial<TimeSlot>): Promise<TimeSlot> {
     return apiService.put<TimeSlot>(`${this.baseUrl}/time-slots/${id}`, data);
   }
 
-  // Delete time slot
   async deleteTimeSlot(id: string): Promise<void> {
     await apiService.delete<void>(`${this.baseUrl}/time-slots/${id}`);
   }
 
-  // Block time slot
   async blockTimeSlot(id: string, _reason?: string): Promise<TimeSlot> {
-    // Notes are not part of Partial<TimeSlot> type; block by status only
     return this.updateTimeSlot(id, {
       status: TimeSlotStatus.BLOCKED,
     });
   }
 
-  // Get appointments by patient
   async getPatientAppointments(
     patientId: string,
     status?: AppointmentStatus[],
@@ -240,7 +207,6 @@ export class AppointmentApiService {
     } as unknown as AppointmentListResponse;
   }
 
-  // Get appointments by doctor
   async getDoctorAppointments(
     doctorId: string,
     status?: AppointmentStatus[],
@@ -281,7 +247,6 @@ export class AppointmentApiService {
     } as unknown as AppointmentListResponse;
   }
 
-  // Get upcoming appointments
   async getUpcomingAppointments(
     patientId?: string,
     doctorId?: string,
@@ -296,7 +261,6 @@ export class AppointmentApiService {
     return apiService.get<Appointment[]>(`${this.baseUrl}/upcoming?${params}`);
   }
 
-  // Get past appointments
   async getPastAppointments(
     patientId?: string,
     doctorId?: string,
@@ -313,7 +277,6 @@ export class AppointmentApiService {
     return apiService.get<AppointmentListResponse>(`${this.baseUrl}/past?${params}`);
   }
 
-  // Search appointments
   async searchAppointments(
     query: string,
     filters?: AppointmentFilters,
@@ -330,7 +293,6 @@ export class AppointmentApiService {
     return apiService.get<AppointmentListResponse>(`${this.baseUrl}/search?${params}`);
   }
 
-  // Export appointments
   async exportAppointments(
     format: 'csv' | 'pdf' | 'excel',
     filters?: AppointmentFilters
@@ -347,7 +309,6 @@ export class AppointmentApiService {
     return response;
   }
 
-  // Bulk operations
   async bulkUpdateAppointments(
     appointmentIds: string[],
     updates: Partial<UpdateAppointmentRequest>
@@ -357,7 +318,6 @@ export class AppointmentApiService {
       updates,
     });
     
-    // Invalidate related caches
     apiService.invalidateCache('appointments');
     
     return appointments;
@@ -370,17 +330,14 @@ export class AppointmentApiService {
     });
   }
 
-  // Appointment reminders
   async sendAppointmentReminder(appointmentId: string, type: 'email' | 'sms'): Promise<void> {
     await apiService.post<void>(`${this.baseUrl}/${appointmentId}/remind`, { type });
   }
 
-  // Appointment notes
   async addAppointmentNote(appointmentId: string, note: string): Promise<Appointment> {
     return apiService.post<Appointment>(`${this.baseUrl}/${appointmentId}/notes`, { note });
   }
 
-  // Appointment follow-up
   async scheduleFollowUp(
     appointmentId: string,
     followUpDate: string,
@@ -392,7 +349,6 @@ export class AppointmentApiService {
     });
   }
 
-  // Helper method to build filter parameters
   private buildFilterParams(filters: AppointmentFilters): Record<string, string> {
     const params: Record<string, string> = {};
 
@@ -428,5 +384,4 @@ export class AppointmentApiService {
   }
 }
 
-// Export singleton instance
 export const appointmentApi = new AppointmentApiService();

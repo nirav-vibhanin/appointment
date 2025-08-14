@@ -84,7 +84,6 @@ const PatientRegistration = () => {
         >
           {({ isSubmitting }) => (
             <Form className="space-y-6">
-              {/* Name */}
               <div>
                 <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
                   <User className="w-4 h-4 inline mr-2" />
@@ -100,7 +99,6 @@ const PatientRegistration = () => {
                 <ErrorMessage name="name" component="div" className="text-red-500 text-sm mt-1" />
               </div>
 
-              {/* Email */}
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
                   <Mail className="w-4 h-4 inline mr-2" />
@@ -116,7 +114,6 @@ const PatientRegistration = () => {
                 <ErrorMessage name="email" component="div" className="text-red-500 text-sm mt-1" />
               </div>
 
-              {/* Phone */}
               <div>
                 <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
                   <Phone className="w-4 h-4 inline mr-2" />
@@ -132,7 +129,6 @@ const PatientRegistration = () => {
                 <ErrorMessage name="phone" component="div" className="text-red-500 text-sm mt-1" />
               </div>
 
-              {/* Date of Birth */}
               <div>
                 <label htmlFor="dateOfBirth" className="block text-sm font-medium text-gray-700 mb-2">
                   <Calendar className="w-4 h-4 inline mr-2" />
@@ -148,7 +144,6 @@ const PatientRegistration = () => {
                 <ErrorMessage name="dateOfBirth" component="div" className="text-red-500 text-sm mt-1" />
               </div>
 
-              {/* Submit Button */}
               <div className="flex justify-end space-x-4 pt-4">
                 <button
                   type="button"
@@ -169,7 +164,6 @@ const PatientRegistration = () => {
           )}
         </Formik>
 
-        {/* Additional Information */}
         <div className="mt-8 p-4 bg-blue-50 rounded-lg">
           <h3 className="text-sm font-medium text-blue-900 mb-2">Why register?</h3>
           <ul className="text-sm text-blue-800 space-y-1">

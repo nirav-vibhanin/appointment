@@ -2,21 +2,15 @@ import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { patientApi } from '../../services/patientApi';
 import {
   Patient,
-  Gender,
-  BloodType,
-  MaritalStatus,
   InsuranceProvider,
   CreatePatientRequest,
   UpdatePatientRequest,
   PatientFilters,
   PatientStats,
   PatientSearchResult,
-  PatientListResponse,
-  PatientSearchResponse,
   PatientWithAppointments,
 } from '../../types/patient';
 
-// Async thunks
 export const fetchPatients = createAsyncThunk(
   'patients/fetchPatients',
   async (args?: { filters?: PatientFilters; page?: number; limit?: number }) => {
@@ -187,14 +181,11 @@ export const mergePatients = createAsyncThunk(
   }
 );
 
-// State interface
 interface PatientState {
-  // Patients list
   patients: Patient[];
   selectedPatient: Patient | null;
   selectedPatientWithAppointments: PatientWithAppointments | null;
   
-  // Pagination
   pagination: {
     page: number;
     limit: number;
@@ -202,13 +193,10 @@ interface PatientState {
     totalPages: number;
   };
   
-  // Filters
   filters: PatientFilters;
   
-  // Statistics
   stats: PatientStats | null;
   
-  // Search results
   searchResults: PatientSearchResult[];
   searchPagination: {
     page: number;
@@ -217,7 +205,6 @@ interface PatientState {
     totalPages: number;
   };
   
-  // Filtered results
   patientsByDoctor: Patient[];
   patientsByDoctorPagination: {
     page: number;
@@ -266,13 +253,11 @@ interface PatientState {
     totalPages: number;
   };
   
-  // Duplicate check
   duplicateCheck: {
     isDuplicate: boolean;
     potentialMatches: Patient[];
   } | null;
   
-  // Loading states
   loading: {
     patients: boolean;
     patient: boolean;
@@ -297,7 +282,6 @@ interface PatientState {
     merging: boolean;
   };
   
-  // Error states
   error: {
     patients: string | null;
     patient: string | null;
@@ -323,7 +307,6 @@ interface PatientState {
   };
 }
 
-// Initial state
 const initialState: PatientState = {
   patients: [],
   selectedPatient: null,
@@ -434,54 +417,44 @@ const initialState: PatientState = {
   },
 };
 
-// Slice
 const patientSlice = createSlice({
   name: 'patients',
   initialState,
   reducers: {
-    // Clear selected patient
     clearSelectedPatient: (state) => {
       state.selectedPatient = null;
       state.selectedPatientWithAppointments = null;
     },
     
-    // Set filters
     setFilters: (state, action: PayloadAction<PatientFilters>) => {
       state.filters = action.payload;
     },
     
-    // Clear filters
     clearFilters: (state) => {
       state.filters = {};
     },
     
-    // Set pagination
     setPagination: (state, action: PayloadAction<{ page: number; limit: number }>) => {
       state.pagination = { ...state.pagination, ...action.payload };
     },
     
-    // Clear duplicate check
     clearDuplicateCheck: (state) => {
       state.duplicateCheck = null;
     },
     
-    // Clear errors
     clearError: (state, action: PayloadAction<keyof PatientState['error']>) => {
       state.error[action.payload] = null;
     },
     
-    // Clear all errors
     clearAllErrors: (state) => {
       Object.keys(state.error).forEach((key) => {
         state.error[key as keyof PatientState['error']] = null;
       });
     },
     
-    // Reset state
     resetPatientState: () => initialState,
   },
   extraReducers: (builder) => {
-    // Fetch patients
     builder
       .addCase(fetchPatients.pending, (state) => {
         state.loading.patients = true;
@@ -498,7 +471,6 @@ const patientSlice = createSlice({
         state.error.patients = action.error.message || 'Failed to fetch patients';
       });
 
-    // Fetch single patient
     builder
       .addCase(fetchPatient.pending, (state) => {
         state.loading.patient = true;
@@ -513,7 +485,6 @@ const patientSlice = createSlice({
         state.error.patient = action.error.message || 'Failed to fetch patient';
       });
 
-    // Fetch patient with appointments
     builder
       .addCase(fetchPatientWithAppointments.pending, (state) => {
         state.loading.patientWithAppointments = true;
@@ -528,7 +499,6 @@ const patientSlice = createSlice({
         state.error.patientWithAppointments = action.error.message || 'Failed to fetch patient with appointments';
       });
 
-    // Create patient
     builder
       .addCase(createPatient.pending, (state) => {
         state.loading.creating = true;
@@ -544,7 +514,6 @@ const patientSlice = createSlice({
         state.error.creating = action.error.message || 'Failed to create patient';
       });
 
-    // Update patient
     builder
       .addCase(updatePatient.pending, (state) => {
         state.loading.updating = true;
@@ -568,7 +537,6 @@ const patientSlice = createSlice({
         state.error.updating = action.error.message || 'Failed to update patient';
       });
 
-    // Delete patient
     builder
       .addCase(deletePatient.pending, (state) => {
         state.loading.deleting = true;
@@ -590,7 +558,6 @@ const patientSlice = createSlice({
         state.error.deleting = action.error.message || 'Failed to delete patient';
       });
 
-    // Deactivate patient
     builder
       .addCase(deactivatePatient.pending, (state) => {
         state.loading.deactivating = true;
@@ -614,7 +581,6 @@ const patientSlice = createSlice({
         state.error.deactivating = action.error.message || 'Failed to deactivate patient';
       });
 
-    // Reactivate patient
     builder
       .addCase(reactivatePatient.pending, (state) => {
         state.loading.reactivating = true;
@@ -638,7 +604,6 @@ const patientSlice = createSlice({
         state.error.reactivating = action.error.message || 'Failed to reactivate patient';
       });
 
-    // Fetch patient stats
     builder
       .addCase(fetchPatientStats.pending, (state) => {
         state.loading.stats = true;
@@ -653,7 +618,6 @@ const patientSlice = createSlice({
         state.error.stats = action.error.message || 'Failed to fetch patient stats';
       });
 
-    // Search patients
     builder
       .addCase(searchPatients.pending, (state) => {
         state.loading.searching = true;
@@ -676,7 +640,6 @@ const patientSlice = createSlice({
         state.error.searching = action.error.message || 'Failed to search patients';
       });
 
-    // Fetch patients by doctor
     builder
       .addCase(fetchPatientsByDoctor.pending, (state) => {
         state.loading.patientsByDoctor = true;
@@ -692,7 +655,6 @@ const patientSlice = createSlice({
         state.error.patientsByDoctor = action.error.message || 'Failed to fetch patients by doctor';
       });
 
-    // Fetch patients by insurance
     builder
       .addCase(fetchPatientsByInsurance.pending, (state) => {
         state.loading.patientsByInsurance = true;
@@ -708,7 +670,6 @@ const patientSlice = createSlice({
         state.error.patientsByInsurance = action.error.message || 'Failed to fetch patients by insurance';
       });
 
-    // Fetch patients by age group
     builder
       .addCase(fetchPatientsByAgeGroup.pending, (state) => {
         state.loading.patientsByAgeGroup = true;
@@ -724,7 +685,6 @@ const patientSlice = createSlice({
         state.error.patientsByAgeGroup = action.error.message || 'Failed to fetch patients by age group';
       });
 
-    // Fetch patients by location
     builder
       .addCase(fetchPatientsByLocation.pending, (state) => {
         state.loading.patientsByLocation = true;
@@ -740,7 +700,6 @@ const patientSlice = createSlice({
         state.error.patientsByLocation = action.error.message || 'Failed to fetch patients by location';
       });
 
-    // Fetch new patients
     builder
       .addCase(fetchNewPatients.pending, (state) => {
         state.loading.newPatients = true;
@@ -756,7 +715,6 @@ const patientSlice = createSlice({
         state.error.newPatients = action.error.message || 'Failed to fetch new patients';
       });
 
-    // Fetch inactive patients
     builder
       .addCase(fetchInactivePatients.pending, (state) => {
         state.loading.inactivePatients = true;
@@ -772,7 +730,6 @@ const patientSlice = createSlice({
         state.error.inactivePatients = action.error.message || 'Failed to fetch inactive patients';
       });
 
-    // Bulk update patients
     builder
       .addCase(bulkUpdatePatients.pending, (state) => {
         state.loading.bulkUpdating = true;
@@ -780,7 +737,6 @@ const patientSlice = createSlice({
       })
       .addCase(bulkUpdatePatients.fulfilled, (state, action) => {
         state.loading.bulkUpdating = false;
-        // Update patients in the list
         action.payload.forEach(updatedPatient => {
           const index = state.patients.findIndex(patient => patient.id === updatedPatient.id);
           if (index !== -1) {
@@ -793,7 +749,6 @@ const patientSlice = createSlice({
         state.error.bulkUpdating = action.error.message || 'Failed to bulk update patients';
       });
 
-    // Bulk deactivate patients
     builder
       .addCase(bulkDeactivatePatients.pending, (state) => {
         state.loading.bulkDeactivating = true;
@@ -801,7 +756,6 @@ const patientSlice = createSlice({
       })
       .addCase(bulkDeactivatePatients.fulfilled, (state, action) => {
         state.loading.bulkDeactivating = false;
-        // Update patients in the list
         action.payload.forEach(updatedPatient => {
           const index = state.patients.findIndex(patient => patient.id === updatedPatient.id);
           if (index !== -1) {
@@ -814,7 +768,6 @@ const patientSlice = createSlice({
         state.error.bulkDeactivating = action.error.message || 'Failed to bulk deactivate patients';
       });
 
-    // Bulk reactivate patients
     builder
       .addCase(bulkReactivatePatients.pending, (state) => {
         state.loading.bulkReactivating = true;
@@ -822,7 +775,6 @@ const patientSlice = createSlice({
       })
       .addCase(bulkReactivatePatients.fulfilled, (state, action) => {
         state.loading.bulkReactivating = false;
-        // Update patients in the list
         action.payload.forEach(updatedPatient => {
           const index = state.patients.findIndex(patient => patient.id === updatedPatient.id);
           if (index !== -1) {
@@ -835,7 +787,6 @@ const patientSlice = createSlice({
         state.error.bulkReactivating = action.error.message || 'Failed to bulk reactivate patients';
       });
 
-    // Check duplicate patient
     builder
       .addCase(checkDuplicatePatient.pending, (state) => {
         state.loading.duplicateChecking = true;
@@ -850,7 +801,6 @@ const patientSlice = createSlice({
         state.error.duplicateChecking = action.error.message || 'Failed to check for duplicate patient';
       });
 
-    // Merge patients
     builder
       .addCase(mergePatients.pending, (state) => {
         state.loading.merging = true;
@@ -858,7 +808,6 @@ const patientSlice = createSlice({
       })
       .addCase(mergePatients.fulfilled, (state, action) => {
         state.loading.merging = false;
-        // Update the merged patient in the list
         const index = state.patients.findIndex(patient => patient.id === action.payload.id);
         if (index !== -1) {
           state.patients[index] = action.payload;
@@ -877,7 +826,6 @@ const patientSlice = createSlice({
   },
 });
 
-// Export actions
 export const {
   clearSelectedPatient,
   setFilters,
@@ -889,7 +837,6 @@ export const {
   resetPatientState,
 } = patientSlice.actions;
 
-// Export selectors
 export const selectPatients = (state: { patients: PatientState }) => state.patients.patients;
 export const selectSelectedPatient = (state: { patients: PatientState }) => state.patients.selectedPatient;
 export const selectSelectedPatientWithAppointments = (state: { patients: PatientState }) => state.patients.selectedPatientWithAppointments;
@@ -914,5 +861,4 @@ export const selectDuplicateCheck = (state: { patients: PatientState }) => state
 export const selectLoading = (state: { patients: PatientState }) => state.patients.loading;
 export const selectError = (state: { patients: PatientState }) => state.patients.error;
 
-// Export reducer
 export default patientSlice.reducer;
